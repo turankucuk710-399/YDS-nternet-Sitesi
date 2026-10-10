@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
   <header class="topbar">
@@ -17,6 +17,7 @@
       <a href="#vocab-quiz" data-route="vocab-quiz">Kelime Testi</a>
       <a href="#questions" data-route="questions">Soru Bankası</a>
       <a href="#articles" data-route="articles">Makale Çeviri</a>
+      <a href="#review" data-route="review">Tekrar <span class="nav-badge" id="reviewBadge" hidden>0</span></a>
     </nav>
     <button class="theme-toggle" id="themeToggle" aria-label="Tema değiştir" title="Açık / koyu tema">☾</button>
   </header>
@@ -29,6 +30,7 @@
         <p>Sınavda en sık çıkan kelimeleri öğren, kartlarla tekrar et ve YDS formatındaki sorularla kendini dene.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#articles">📖 Makale Çeviri</a>
+          <a class="btn" href="#review">Tekrar</a>
           <a class="btn" href="#cards">Kelime Kartları</a>
           <a class="btn" href="#questions">Soru Bankası</a>
         </div>
@@ -95,7 +97,7 @@
           <option value="adv">Zarflar</option>
           <option value="phr">Öbek fiiller</option>
           <option value="conj">Bağlaçlar</option>
-          <option value="art-review">Makale tekrar listem</option>
+          <option value="review">Tekrar listem</option>
         </select>
         <label class="check"><input type="checkbox" id="cardReverse"> Türkçeden başla</label>
       </div>
@@ -150,9 +152,9 @@
         <p class="muted">YDS okuma parçası tarzında yazılmış makaleler. Bir makale seç, <span class="term-sample">mavi kelimelere</span> tıklayarak anlamlarını gör, diğer kelimelere tıklayarak cümlenin çevirisine bak. Sonra makaleyi çevir ve çevirini kontrol ettir.</p>
         <div class="art-cards" id="artCards"></div>
         <div class="review-box">
-          <h2>Tekrar listem (<span id="artReviewCount">0</span>)</h2>
-          <ul class="review-list" id="artReviewList"></ul>
-          <a class="btn btn-primary" href="#cards" id="artReviewCards" hidden>Kartlarla tekrar et</a>
+          <h2>Tekrar</h2>
+          <p id="artReviewSummary"></p>
+          <a class="btn btn-primary" href="#review">Tekrar alanına git</a>
         </div>
       </div>
 
@@ -174,17 +176,26 @@
         <div id="artResult"></div>
       </div>
     </section>
+
+    <!-- Tekrar -->
+    <section class="view" id="view-review" hidden>
+      <h1>Tekrar</h1>
+      <p class="muted">Eksik olduğun her şey burada: makalelerde ve testlerde öğrenemediğin kelimeler, çevirinde zayıf kalan cümleler ve yanlış yaptığın sorular. Tekrar ettikçe listeden düşerler.</p>
+      <div class="rev-tabs" id="revTabs"></div>
+      <div id="revBody"></div>
+    </section>
   </main>
 
   <footer class="footer">
     <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=3"></script>
-  <script src="js/data/questions.js?v=3"></script>
-  <script src="js/data/articles.js?v=3"></script>
-  <script src="js/translate-check.js?v=3"></script>
-  <script src="js/articles.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/data/words.js?v=4"></script>
+  <script src="js/data/questions.js?v=4"></script>
+  <script src="js/data/articles.js?v=4"></script>
+  <script src="js/translate-check.js?v=4"></script>
+  <script src="js/articles.js?v=4"></script>
+  <script src="js/review.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

@@ -159,30 +159,45 @@
       return cache[k];
     }
 
-    var NEG = -1e9;
-    var dp = [], back = [];
-    for (var i = 0; i <= n; i++) {
-      dp.push(new Array(m + 1).fill(NEG));
-      back.push(new Array(m + 1).fill(null));
+    // dp[f][i][j]: ilk i örnek cümle, ilk j kullanıcı cümlesiyle eşlendiğinde en iyi toplam.
+    // f = 1 ise i. örnek cümlenin grubu, bir önceki cümlenin son kullanıcı cümlesini paylaşıyor
+    // (kullanıcı iki cümleyi tek cümlede çevirmiş). Paylaşılan grup ancak gerçekten eşleşiyorsa
+    // (puan >= SHARE_MIN) puan kazandırır; böylece bir cümle çevrilmemiş komşulara yayılmaz.
+    var NEG = -1e9, SHARE_MIN = 40;
+    var dp = [[], []], back = [[], []];
+    for (var f = 0; f < 2; f++) {
+      for (var i = 0; i <= n; i++) {
+        dp[f].push(new Array(m + 1).fill(NEG));
+        back[f].push(new Array(m + 1).fill(null));
+      }
     }
-    dp[0][0] = 0;
-    for (var j0 = 1; j0 <= m; j0++) { dp[0][j0] = 0; back[0][j0] = { skip: true }; }
+    dp[0][0][0] = 0;
+    for (var j0 = 1; j0 <= m; j0++) { dp[0][0][j0] = 0; back[0][0][j0] = { skip: true, pf: 0 }; }
+
+    function relax(f, i, j, val, b) {
+      if (val > dp[f][i][j]) { dp[f][i][j] = val; back[f][i][j] = b; }
+    }
 
     for (i = 1; i <= n; i++) {
       for (var j = 0; j <= m; j++) {
         // Fazladan kullanıcı cümlesini atla
-        if (j > 0 && dp[i][j - 1] > dp[i][j]) { dp[i][j] = dp[i][j - 1]; back[i][j] = { skip: true }; }
+        if (j > 0) {
+          relax(0, i, j, dp[0][i][j - 1], { skip: true, pf: 0 });
+          relax(0, i, j, dp[1][i][j - 1], { skip: true, pf: 1 });
+        }
         for (var k = Math.max(0, j - 3); k <= j; k++) {
-          if (dp[i - 1][k] === NEG) continue;
-          var starts = [k];
-          if (k > 0 && j === k) starts.push(k - 1); // paylaşılan cümle
-          if (k > 0 && j > k) starts.push(k - 1);
-          for (var si = 0; si < starts.length; si++) {
-            var s = starts[si];
-            if (j - s > 3) continue;
-            var r = evalGroup(i - 1, s, j);
-            var val = dp[i - 1][k] + r.score * weights[i - 1];
-            if (val > dp[i][j]) { dp[i][j] = val; back[i][j] = { k: k, s: s }; }
+          for (var pf = 0; pf < 2; pf++) {
+            if (dp[pf][i - 1][k] === NEG) continue;
+            // Paylaşımsız grup [k, j)
+            var r = evalGroup(i - 1, k, j);
+            relax(0, i, j, dp[pf][i - 1][k] + r.score * weights[i - 1] - 0.5 * (j - k), { k: k, s: k, pf: pf });
+            // Önceki cümlenin son kullanıcı cümlesini paylaşan grup [k-1, j)
+            if (k > 0 && j - k + 1 <= 3) {
+              var r2 = evalGroup(i - 1, k - 1, j);
+              var eff = r2.score >= SHARE_MIN ? r2.score : 0;
+              // Gruba alınan her kullanıcı cümlesi için küçük bir bedel: eşitlikte daha dar grubu seç
+              relax(1, i, j, dp[pf][i - 1][k] + eff * weights[i - 1] - 0.5 * (j - k + 1), { k: k, s: k - 1, pf: pf });
+            }
           }
         }
       }
@@ -190,19 +205,33 @@
 
     // Geri izleme
     var details = new Array(n);
-    i = n; j = m;
+    j = m; i = n;
+    var cf = dp[1][n][m] > dp[0][n][m] ? 1 : 0;
     while (i > 0) {
-      var b = back[i][j];
+      var b = back[cf][i][j];
       if (!b) break;
-      if (b.skip) { j--; continue; }
+      if (b.skip) { j--; cf = b.pf; continue; }
       details[i - 1] = {
         en: refs[i - 1].en,
         tr: refs[i - 1].tr,
         user: user.slice(b.s, j).join(" "),
-        result: evalGroup(i - 1, b.s, j)
+        result: evalGroup(i - 1, b.s, j),
+        range: [b.s, j]
       };
-      j = b.k; i--;
+      j = b.k; cf = b.pf; i--;
     }
+
+    // Bir önceki cümlenin zaten aldığı metni yeniden kullanan ve düşük puan alan cümle
+    // aslında çevrilmemiştir (tek bir kullanıcı cümlesi birden çok örnek cümleye yayılmasın).
+    var prevRange = null;
+    details.forEach(function (d, idx) {
+      if (!d) { prevRange = null; return; }
+      var r = d.range;
+      var reused = prevRange && r[0] >= prevRange[0] && r[1] <= prevRange[1];
+      prevRange = reused ? prevRange : r;
+      if (reused && d.result.score < SHARE_MIN) details[idx] = null;
+      if (details[idx]) delete details[idx].range;
+    });
 
     var totalW = 0, sum = 0;
     details.forEach(function (d, idx) {

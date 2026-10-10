@@ -30,7 +30,9 @@
 
   // ---------- Kalıcı durum (localStorage) ----------
   var STORE_KEY = "yds-study-v1";
-  function emptyState() { return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {} }; }
+  function emptyState() {
+    return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {} };
+  }
   var state = emptyState();
 
   function load() {
@@ -43,6 +45,8 @@
         state.vocabBest = parsed.vocabBest || 0;
         state.artWords = parsed.artWords || {};
         state.artScores = parsed.artScores || {};
+        state.missedWords = parsed.missedWords || {};
+        state.weakSents = parsed.weakSents || {};
       }
     } catch (e) { /* depolama yoksa bellekte devam et */ }
   }
@@ -52,25 +56,70 @@
   }
 
   // Makale kelimeleri (t: "art") state.artWords içinde "learned" / "review" olarak tutulur.
+  // Ana listedeki kelimelerden yanlış yapılan / bilinmeyenler state.missedWords içinde
+  // kaynağıyla (src) birlikte tutulur; ikisi birlikte "Tekrar" alanının kelime listesini oluşturur.
   function isKnown(w) {
     if (w.t === "art") return !!(state.artWords[w.key] && state.artWords[w.key].st === "learned");
     return !!state.known[w.w];
   }
 
-  function setKnown(w, val) {
+  function findMain(lower) {
+    return WORDS.find(function (x) { return x.w.toLowerCase() === lower; });
+  }
+
+  function setMain(w, val, src) {
+    if (val) {
+      state.known[w.w] = true;
+      delete state.missedWords[w.w];
+    } else {
+      delete state.known[w.w];
+      var prev = state.missedWords[w.w] || { n: 0 };
+      state.missedWords[w.w] = { n: prev.n + 1, t: Date.now(), src: src || prev.src || "liste" };
+    }
+  }
+
+  // src: kelimenin tekrar listesine nereden düştüğü (makale, ceviri, test, kart, liste)
+  function setKnown(w, val, src) {
     if (w.t === "art") {
-      if (state.artWords[w.key]) state.artWords[w.key].st = val ? "learned" : "review";
-    } else if (val) state.known[w.w] = true;
-    else delete state.known[w.w];
+      var a = state.artWords[w.key];
+      if (a) {
+        a.st = val ? "learned" : "review";
+        if (!val && src) a.src = src;
+        a.t = Date.now();
+      }
+      var main = findMain(w.key);
+      if (main) setMain(main, val, src || "makale");
+    } else {
+      setMain(w, val, src);
+      var art = state.artWords[w.w.toLowerCase()];
+      if (art) art.st = val ? "learned" : "review";
+    }
     save();
   }
 
+  var SRC_LABELS = { makale: "Makale", ceviri: "Çeviri hatası", test: "Kelime testi", kart: "Kartlar", liste: "Kelime listesi" };
+
   function reviewWords() {
-    return Object.keys(state.artWords).filter(function (k) { return state.artWords[k].st === "review"; })
-      .map(function (k) {
-        var a = state.artWords[k];
-        return { w: a.w, t: "art", m: a.m, e: a.s, key: k };
-      });
+    var seen = {}, list = [];
+    Object.keys(state.artWords).forEach(function (k) {
+      var a = state.artWords[k];
+      if (a.st !== "review") return;
+      seen[k] = true;
+      list.push({ w: a.w, t: "art", m: a.m, e: a.s, key: k, src: a.src || "makale", at: a.a, time: a.t || 0 });
+    });
+    Object.keys(state.missedWords).forEach(function (word) {
+      var main = WORDS.find(function (x) { return x.w === word; });
+      if (!main || seen[word.toLowerCase()]) return;
+      var mw = state.missedWords[word];
+      list.push({ w: main.w, t: main.t, m: main.m, e: main.e, key: word.toLowerCase(), src: mw.src, n: mw.n, time: mw.t || 0 });
+    });
+    return list.sort(function (a, b) { return b.time - a.time; });
+  }
+
+  function weakSentenceCount() { return Object.keys(state.weakSents).length; }
+
+  function wrongQuestionCount() {
+    return Object.keys(state.answers).filter(function (k) { return state.answers[k] === false; }).length;
   }
 
   // ---------- Tema ----------
@@ -131,12 +180,16 @@
       stat(answeredIds.length + " / " + QUESTIONS.length, "Çözülen soru",
         QUESTIONS.length ? Math.round((answeredIds.length / QUESTIONS.length) * 100) : 0) +
       stat(answeredIds.length ? Math.round((correct / answeredIds.length) * 100) + "%" : "—", "Soru başarı oranı", null) +
-      stat(state.vocabBest ? state.vocabBest + "%" : "—", "En iyi kelime testi", null);
+      stat(state.vocabBest ? state.vocabBest + "%" : "—", "En iyi kelime testi", null) +
+      stat(String(reviewWords().length + weakSentenceCount() + wrongQuestionCount()), "Tekrar bekleyen", null, "#review");
   }
 
-  function stat(value, label, pct) {
-    return '<div class="stat"><div class="stat-value">' + esc(value) + '</div><div class="stat-label">' + esc(label) + "</div>" +
-      (pct === null ? "" : '<div class="bar"><span style="width:' + pct + '%"></span></div>') + "</div>";
+  function stat(value, label, pct, href) {
+    var tag = href ? 'a href="' + href + '"' : "div";
+    return "<" + tag + ' class="stat' + (href ? " stat-link" : "") + '"><div class="stat-value">' + esc(value) +
+      '</div><div class="stat-label">' + esc(label) + "</div>" +
+      (pct === null || pct === undefined ? "" : '<div class="bar"><span style="width:' + pct + '%"></span></div>') +
+      "</" + (href ? "a" : "div") + ">";
   }
 
   // ---------- Kelime listesi ----------
@@ -177,7 +230,7 @@
       var btn = e.target.closest(".mark");
       if (!btn) return;
       var w = WORDS.find(function (x) { return x.w === btn.getAttribute("data-word"); });
-      if (w) { setKnown(w, !isKnown(w)); renderWords(); }
+      if (w) { setKnown(w, !isKnown(w), "liste"); renderWords(); }
     });
   }
 
@@ -186,7 +239,7 @@
 
   function startCards() {
     var set = $("cardSet").value;
-    if (set === "art-review") { deck = shuffle(reviewWords()); deckPos = 0; showCard(); return; }
+    if (set === "review") { deck = shuffle(reviewWords()); deckPos = 0; showCard(); return; }
     var pool = WORDS.filter(function (w) {
       if (set === "all") return true;
       if (set === "unknown") return !isKnown(w);
@@ -231,7 +284,7 @@
   function answerCard(known) {
     if (deckPos >= deck.length) return;
     var w = deck[deckPos];
-    setKnown(w, known);
+    setKnown(w, known, "kart");
     if (!known) {
       // Bilinmeyen kelimeyi birkaç kart sonra tekrar göster
       var insertAt = Math.min(deck.length, deckPos + 4);
@@ -249,7 +302,7 @@
     $("cardReverse").addEventListener("change", showCard);
     document.addEventListener("keydown", function (e) {
       if ($("view-cards").hidden) return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
       if (e.key === " ") { e.preventDefault(); flipCard(); }
       else if (e.key === "ArrowRight") answerCard(true);
       else if (e.key === "ArrowLeft") answerCard(false);
@@ -340,8 +393,8 @@
   // Test sırasında 1-5 veya A-E tuşlarıyla cevaplama, Enter ile ilerleme
   document.addEventListener("keydown", function (e) {
     var view = document.querySelector(".view:not([hidden])");
-    if (!view || (view.id !== "view-vocab-quiz" && view.id !== "view-questions")) return;
-    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (!view || (view.id !== "view-vocab-quiz" && view.id !== "view-questions" && view.id !== "view-review")) return;
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
     var key = e.key.toUpperCase();
     var idx = "12345".indexOf(key);
     if (idx === -1) idx = LETTERS.indexOf(key);
@@ -367,7 +420,7 @@
         options: choices.map(function (c) { return d === "en" ? c.m : c.w; }),
         answer: choices.indexOf(w),
         explain: w.w + " (" + TYPE_LABELS[w.t] + "): " + w.m + " — " + w.e,
-        onAnswer: function (ok) { if (!ok) setKnown(w, false); }
+        onAnswer: function (ok) { if (!ok) setKnown(w, false, "test"); }
       };
     });
   }
@@ -435,6 +488,10 @@
     save: save,
     setKnown: setKnown,
     reviewWords: reviewWords,
+    weakSentenceCount: weakSentenceCount,
+    wrongQuestionCount: wrongQuestionCount,
+    srcLabels: SRC_LABELS,
+    runQuiz: runQuiz,
     registerRoute: function (name, fn) { routes[name] = fn; }
   };
 

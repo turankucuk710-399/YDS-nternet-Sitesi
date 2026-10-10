@@ -412,3 +412,86 @@ main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .sr-en { color: var(--muted); font-style: italic; }
 .sr-label { font-weight: 600; }
 .sr-issues { margin: 0.35rem 0 0.2rem; padding-left: 1.2rem; font-size: 0.93rem; }
+
+/* ---- Tekrar ---- */
+.nav-badge {
+  display: inline-block;
+  min-width: 1.3em;
+  padding: 0 5px;
+  margin-left: 2px;
+  border-radius: 99px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+.nav-badge[hidden] { display: none; }
+.stat-link { text-decoration: none; color: var(--text); transition: border-color 0.15s; }
+.stat-link:hover { border-color: var(--primary); }
+.stat-link .stat-value { color: var(--warn); }
+
+.rev-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 1rem 0; }
+.rev-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rev-tab.active { border-color: var(--primary); box-shadow: inset 0 -3px 0 var(--primary); color: var(--text); }
+.rev-tab-n { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+
+.rev-list { display: grid; gap: 0.6rem; }
+.rev-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0.2rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; }
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.filter-chips { margin-bottom: 0.9rem; }
+.filter-chips .chip { cursor: pointer; background: var(--surface); color: var(--muted); border-color: var(--border); font: inherit; font-size: 0.85rem; }
+.filter-chips .chip.active { background: var(--primary); border-color: var(--primary); color: var(--primary-contrast); }
+
+.empty-box { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); padding: 1.25rem; text-align: center; }
+.empty-box .btn { text-decoration: none; display: inline-block; margin-top: 0.25rem; }
+
+.drill-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; margin-top: 1rem; }
+.drill-en { font-size: 1.12rem; line-height: 1.7; margin-top: 0; }
+.drill-hints { margin: 0.5rem 0; font-size: 0.93rem; }
+.drill-hints summary { cursor: pointer; color: var(--primary); font-weight: 500; }
+.drill-hints ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+#drillInput {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+#drillResult { margin-top: 0.75rem; }
+.tracked { background: var(--warn-bg); color: var(--text); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.93rem; }
+.tracked.good { background: var(--good-bg); }
+
+@media (max-width: 640px) {
+  .rev-tab { padding: 0.6rem; font-size: 0.85rem; }
+  .rev-tab-n { font-size: 1.25rem; }
+}

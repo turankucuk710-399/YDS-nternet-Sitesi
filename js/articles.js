@@ -59,14 +59,10 @@
   }
 
   function renderReview() {
-    var list = app.reviewWords();
-    $("artReviewCount").textContent = list.length;
-    $("artReviewList").innerHTML = list.length ? list.map(function (w) {
-      return '<li><div><strong>' + esc(w.w) + "</strong> — " + esc(w.m) +
-        '<div class="muted small">' + esc(w.e) + "</div></div>" +
-        '<button class="btn btn-good btn-sm" data-learn="' + esc(w.key) + '">Öğrendim</button></li>';
-    }).join("") : '<li class="muted">Henüz tekrar listende kelime yok. Makalelerde mavi kelimelere tıklayıp "Öğrenmedim" dediğin kelimeler burada toplanır.</li>';
-    $("artReviewCards").hidden = !list.length;
+    var words = app.reviewWords().length, sents = app.weakSentenceCount();
+    $("artReviewSummary").innerHTML = words || sents
+      ? "Tekrar listende <strong>" + words + " kelime</strong> ve <strong>" + sents + " çeviri cümlesi</strong> var."
+      : 'Henüz tekrar listende bir şey yok. Mavi kelimelerde "Öğrenmedim" dediğin kelimeler ve çevirinde 85 puanın altında kalan cümleler burada toplanır.';
   }
 
   // ---------- Okuyucu ----------
@@ -177,11 +173,11 @@
       m: el.getAttribute("data-m"),
       s: Check.plainEnglish(s.en),
       a: current.id,
-      st: st
+      st: st,
+      src: "makale"
     };
-    // Aynı kelime ana kelime listesinde de varsa onu da güncelle
-    var main = app.words.find(function (x) { return x.w.toLowerCase() === k; });
-    if (main) app.setKnown(main, st === "learned"); else app.save();
+    // Aynı kelime ana kelime listesinde de varsa setKnown onu da günceller
+    app.setKnown({ t: "art", key: k }, st === "learned", "makale");
 
     document.querySelectorAll('.term[data-k="' + CSS.escape(k) + '"]').forEach(function (t) {
       t.classList.remove("is-learned", "is-review");
@@ -231,6 +227,7 @@
 
     var counts = { good: 0, mid: 0, bad: 0 };
     res.sentences.forEach(function (d) { counts[band(d.result.score)]++; });
+    var tracked = trackResults(current, res.sentences.map(function (d, i) { return { i: i, user: d.user, result: d.result }; }));
 
     $("artResult").innerHTML =
       '<div class="result art-score ' + band(res.score) + '">' +
@@ -238,6 +235,12 @@
       "<p>" + summary(res.score) + "</p>" +
       '<p class="muted small">' + res.sentences.length + " cümleden " + counts.good + " tanesi iyi, " + counts.mid +
       " tanesi kısmen doğru, " + counts.bad + " tanesi eksik ya da hatalı." + "</p>" +
+      (tracked.sents || tracked.words
+        ? '<p class="tracked">↻ ' + (tracked.sents ? "<strong>" + tracked.sents + " cümle</strong> " : "") +
+          (tracked.sents && tracked.words ? "ve " : "") + (tracked.words ? "<strong>" + tracked.words + " kelime</strong> " : "") +
+          'tekrar listene eklendi. <a href="#review">Tekrar alanına git →</a></p>'
+        : "") +
+      (tracked.cleared ? '<p class="tracked good">✓ Daha önce zayıf olan ' + tracked.cleared + " cümleyi bu sefer doğru çevirdin; tekrar listenden çıkarıldı.</p>" : "") +
       '<p class="muted small">Puan nasıl hesaplanır? Her cümlede anahtar kavramların (mavi kelimeler) çevirinde karşılık bulup bulmadığına (%60) ve örnek çeviriyle içerik benzerliğine (%40) bakılır; atlanan, çok kısa kalan ya da çevrilmeden bırakılan bölümler puan düşürür. Farklı ama doğru bir ifade seçtiysen puanın biraz düşük çıkabilir, bu yüzden örnek çeviriyle karşılaştırmayı unutma.</p>' +
       "</div>" +
       res.sentences.map(function (d, i) {
@@ -252,6 +255,56 @@
       }).join("");
     $("artResult").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Çeviri sonuçlarını tekrar listesine işler.
+  // items: [{ i: cümle indeksi, user: kullanıcının metni, result }]
+  // 85'in altındaki (boş olmayan) cümleler zayıf cümle olarak kaydedilir, 85 ve üstü olanlar listeden çıkar.
+  // Karşılığı bulunamayan anahtar kelimeler (daha önce "öğrendim" denmemişse) kelime tekrarına eklenir.
+  function trackResults(article, items) {
+    var st = state(), out = { sents: 0, words: 0, cleared: 0 };
+    items.forEach(function (it) {
+      var id = article.id + ":" + it.i;
+      var r = it.result;
+      if (r.empty) return;
+      var prev = st.weakSents[id];
+      if (r.score >= 85) {
+        if (prev) { delete st.weakSents[id]; out.cleared++; }
+      } else {
+        if (!prev) out.sents++;
+        st.weakSents[id] = {
+          a: article.id,
+          i: it.i,
+          score: r.score,
+          best: Math.max(r.score, prev ? prev.best : 0),
+          first: prev ? prev.first : r.score,
+          tries: (prev ? prev.tries : 0) + 1,
+          user: it.user,
+          missing: r.missing.map(function (t) { return t.en; }),
+          t: Date.now()
+        };
+      }
+      r.missing.forEach(function (t) {
+        var k = keyOf(t.en);
+        var w = st.artWords[k];
+        if (w && w.st === "learned") return;
+        if (!w || w.st !== "review") out.words++;
+        st.artWords[k] = {
+          w: t.en, m: t.meaning, s: Check.plainEnglish(article.sentences[it.i].en),
+          a: article.id, st: "review", src: w ? w.src : "ceviri", t: Date.now()
+        };
+      });
+    });
+    app.save();
+    return out;
+  }
+
+  // Tekrar alanının kullanması için
+  window.YDSArticles = {
+    find: findArticle,
+    band: band,
+    sentenceIssues: sentenceIssues,
+    trackResults: trackResults
+  };
 
   // ---------- Olaylar ----------
   pop = document.createElement("div");
@@ -310,18 +363,6 @@
   });
   $("artInput").addEventListener("input", function () { if (current) saveDraft(current.id, this.value); });
 
-  $("artReviewList").addEventListener("click", function (e) {
-    var b = e.target.closest("[data-learn]");
-    if (!b) return;
-    var k = b.getAttribute("data-learn");
-    if (state().artWords[k]) {
-      state().artWords[k].st = "learned";
-      var main = app.words.find(function (x) { return x.w.toLowerCase() === k; });
-      if (main) app.setKnown(main, true); else app.save();
-    }
-    renderReview();
-  });
-  $("artReviewCards").addEventListener("click", function () { $("cardSet").value = "art-review"; });
 
   app.registerRoute("articles", route);
 });
