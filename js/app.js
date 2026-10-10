@@ -5,7 +5,7 @@
   var QUESTIONS = window.YDS_QUESTIONS || [];
   var CATEGORIES = window.YDS_CATEGORIES || {};
   var LETTERS = ["A", "B", "C", "D", "E"];
-  var TYPE_LABELS = { v: "fiil", n: "isim", adj: "sıfat", adv: "zarf", phr: "öbek fiil", conj: "bağlaç" };
+  var TYPE_LABELS = { v: "fiil", n: "isim", adj: "sıfat", adv: "zarf", phr: "öbek fiil", conj: "bağlaç", art: "makale kelimesi" };
   var LEVEL_LABELS = { 1: "Temel", 2: "Orta", 3: "İleri" };
 
   // ---------- Yardımcılar ----------
@@ -30,7 +30,8 @@
 
   // ---------- Kalıcı durum (localStorage) ----------
   var STORE_KEY = "yds-study-v1";
-  var state = { known: {}, answers: {}, vocabBest: 0 };
+  function emptyState() { return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {} }; }
+  var state = emptyState();
 
   function load() {
     try {
@@ -40,6 +41,8 @@
         state.known = parsed.known || {};
         state.answers = parsed.answers || {};
         state.vocabBest = parsed.vocabBest || 0;
+        state.artWords = parsed.artWords || {};
+        state.artScores = parsed.artScores || {};
       }
     } catch (e) { /* depolama yoksa bellekte devam et */ }
   }
@@ -48,11 +51,26 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { }
   }
 
-  function isKnown(w) { return !!state.known[w.w]; }
+  // Makale kelimeleri (t: "art") state.artWords içinde "learned" / "review" olarak tutulur.
+  function isKnown(w) {
+    if (w.t === "art") return !!(state.artWords[w.key] && state.artWords[w.key].st === "learned");
+    return !!state.known[w.w];
+  }
 
   function setKnown(w, val) {
-    if (val) state.known[w.w] = true; else delete state.known[w.w];
+    if (w.t === "art") {
+      if (state.artWords[w.key]) state.artWords[w.key].st = val ? "learned" : "review";
+    } else if (val) state.known[w.w] = true;
+    else delete state.known[w.w];
     save();
+  }
+
+  function reviewWords() {
+    return Object.keys(state.artWords).filter(function (k) { return state.artWords[k].st === "review"; })
+      .map(function (k) {
+        var a = state.artWords[k];
+        return { w: a.w, t: "art", m: a.m, e: a.s, key: k };
+      });
   }
 
   // ---------- Tema ----------
@@ -87,7 +105,9 @@
   };
 
   function route() {
-    var name = location.hash.replace("#", "") || "home";
+    var parts = location.hash.replace("#", "").split("/");
+    var name = parts[0] || "home";
+    var arg = parts.slice(1).join("/");
     if (!routes[name]) name = "home";
     document.querySelectorAll(".view").forEach(function (v) {
       v.hidden = v.id !== "view-" + name;
@@ -95,7 +115,7 @@
     document.querySelectorAll("#nav a").forEach(function (a) {
       a.classList.toggle("active", a.getAttribute("data-route") === name);
     });
-    routes[name]();
+    routes[name](arg);
     window.scrollTo(0, 0);
   }
 
@@ -166,6 +186,7 @@
 
   function startCards() {
     var set = $("cardSet").value;
+    if (set === "art-review") { deck = shuffle(reviewWords()); deckPos = 0; showCard(); return; }
     var pool = WORDS.filter(function (w) {
       if (set === "all") return true;
       if (set === "unknown") return !isKnown(w);
@@ -406,6 +427,17 @@
     $("qStart").addEventListener("click", start);
   }
 
+  // Diğer modüllerin (ör. makale çeviri) kullanması için küçük bir arayüz
+  window.YDSApp = {
+    esc: esc,
+    words: WORDS,
+    getState: function () { return state; },
+    save: save,
+    setKnown: setKnown,
+    reviewWords: reviewWords,
+    registerRoute: function (name, fn) { routes[name] = fn; }
+  };
+
   // ---------- Başlangıç ----------
   function init() {
     load();
@@ -414,9 +446,11 @@
     initCards();
     initVocabQuiz();
     initQuestions();
+    // app.js'ten önce yüklenen modüller (ör. js/articles.js) burada başlatılır
+    (window.YDS_MODULES || []).forEach(function (fn) { fn(window.YDSApp); });
     $("resetProgress").addEventListener("click", function () {
-      if (!confirm("Tüm ilerlemen (bildiğin kelimeler ve soru sonuçları) silinecek. Emin misin?")) return;
-      state = { known: {}, answers: {}, vocabBest: 0 };
+      if (!confirm("Tüm ilerlemen (bildiğin kelimeler, tekrar listen, soru ve çeviri sonuçları) silinecek. Emin misin?")) return;
+      state = emptyState();
       save();
       route();
     });

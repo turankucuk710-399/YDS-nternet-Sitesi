@@ -16,6 +16,7 @@
       <a href="#cards" data-route="cards">Kartlar</a>
       <a href="#vocab-quiz" data-route="vocab-quiz">Kelime Testi</a>
       <a href="#questions" data-route="questions">Soru Bankası</a>
+      <a href="#articles" data-route="articles">Makale Çeviri</a>
     </nav>
     <button class="theme-toggle" id="themeToggle" aria-label="Tema değiştir" title="Açık / koyu tema">☾</button>
   </header>
@@ -33,6 +34,7 @@
         <a class="tile" href="#cards"><h3>Kelime Kartları</h3><p>Kartı çevir, bildiklerini işaretle. Bilmediklerin tekrar karşına çıksın.</p></a>
         <a class="tile" href="#vocab-quiz"><h3>Kelime Testi</h3><p>Rastgele oluşturulan çoktan seçmeli sorularla kelime bilgini ölç.</p></a>
         <a class="tile" href="#questions"><h3>Soru Bankası</h3><p>Kelime, dil bilgisi, bağlaç, cümle tamamlama, çeviri, okuma ve paragraf soruları.</p></a>
+        <a class="tile" href="#articles"><h3>Makale Çeviri</h3><p>YDS tarzı makaleleri oku, kelimelere tıklayıp anlamını gör, çevirini yaz ve 100 üzerinden puanını al.</p></a>
       </div>
       <div class="tips">
         <h2>YDS hakkında kısa bilgiler</h2>
@@ -88,6 +90,7 @@
           <option value="adv">Zarflar</option>
           <option value="phr">Öbek fiiller</option>
           <option value="conj">Bağlaçlar</option>
+          <option value="art-review">Makale tekrar listem</option>
         </select>
         <label class="check"><input type="checkbox" id="cardReverse"> Türkçeden başla</label>
       </div>
@@ -134,6 +137,38 @@
       </div>
       <div id="qBody"></div>
     </section>
+
+    <!-- Makale Çeviri -->
+    <section class="view" id="view-articles" hidden>
+      <div id="artList">
+        <h1>Makale Çeviri</h1>
+        <p class="muted">YDS okuma parçası tarzında yazılmış makaleler. Bir makale seç, <span class="term-sample">mavi kelimelere</span> tıklayarak anlamlarını gör, diğer kelimelere tıklayarak cümlenin çevirisine bak. Sonra makaleyi çevir ve çevirini kontrol ettir.</p>
+        <div class="art-cards" id="artCards"></div>
+        <div class="review-box">
+          <h2>Tekrar listem (<span id="artReviewCount">0</span>)</h2>
+          <ul class="review-list" id="artReviewList"></ul>
+          <a class="btn btn-primary" href="#cards" id="artReviewCards" hidden>Kartlarla tekrar et</a>
+        </div>
+      </div>
+
+      <div id="artReader" hidden>
+        <a class="back" href="#articles">← Makaleler</a>
+        <div class="art-head" id="artHead"></div>
+        <p class="art-hint">💡 <span class="term-sample">Mavi kelimeye</span> tıkla: Türkçe anlamı ve “Öğrendim / Öğrenmedim” seçenekleri. Diğer kelimelere tıkla: cümlenin tamamının çevirisi.</p>
+        <div class="art-text" id="artText"></div>
+
+        <h2>Çevirin</h2>
+        <p class="muted small">Makalenin tamamını Türkçeye çevir. Cümlelerin sırasını korumaya çalış; her cümleyi nokta ile bitir. Yazdıkların bu tarayıcıda otomatik kaydedilir.</p>
+        <textarea id="artInput" rows="10" placeholder="Çevirini buraya yaz…"></textarea>
+        <div class="toolbar art-actions">
+          <button class="btn btn-primary" id="artCheck">Çeviriyi kontrol et</button>
+          <button class="btn" id="artRefToggle">Örnek çeviriyi göster</button>
+          <button class="btn" id="artClear">Temizle</button>
+        </div>
+        <div class="ref-box" id="artRefBox" hidden></div>
+        <div id="artResult"></div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer">
@@ -142,6 +177,9 @@
 
   <script src="js/data/words.js"></script>
   <script src="js/data/questions.js"></script>
+  <script src="js/data/articles.js"></script>
+  <script src="js/translate-check.js"></script>
+  <script src="js/articles.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
