@@ -202,6 +202,12 @@
   function sentenceIssues(r) {
     var out = [];
     if (r.empty) return ["Bu cümle çevrilmemiş ya da çevirinde karşılığı bulunamadı."];
+    if (r.noRef) {
+      return [r.missing.length
+        ? "Eklediğin kelimenin anlamı (" + r.missing.map(function (t) { return "<strong>" + esc(t.meaning) + "</strong>"; }).join(", ") + ") çevirinde bulunamadı."
+        : "Eklediğin kelimeyi doğru çevirmişsin. 👍",
+        "Bu cümlenin örnek çevirisi olmadığı için yalnızca eklediğin kelimenin anlamı kontrol edildi."];
+    }
     if (r.missing.length) {
       out.push("Karşılığı bulunamayan ifadeler: " + r.missing.map(function (t) {
         return "<strong>" + esc(t.en) + "</strong> (" + esc(t.meaning) + ")";
@@ -260,40 +266,84 @@
   // items: [{ i: cümle indeksi, user: kullanıcının metni, result }]
   // 85'in altındaki (boş olmayan) cümleler zayıf cümle olarak kaydedilir, 85 ve üstü olanlar listeden çıkar.
   // Karşılığı bulunamayan anahtar kelimeler (daha önce "öğrendim" denmemişse) kelime tekrarına eklenir.
-  function trackResults(article, items) {
-    var st = state(), out = { sents: 0, words: 0, cleared: 0 };
-    items.forEach(function (it) {
-      var id = article.id + ":" + it.i;
-      var r = it.result;
-      if (r.empty) return;
-      var prev = st.weakSents[id];
-      if (r.score >= 85) {
-        if (prev) { delete st.weakSents[id]; out.cleared++; }
-      } else {
-        if (!prev) out.sents++;
-        st.weakSents[id] = {
-          a: article.id,
-          i: it.i,
-          score: r.score,
-          best: Math.max(r.score, prev ? prev.best : 0),
-          first: prev ? prev.first : r.score,
-          tries: (prev ? prev.tries : 0) + 1,
-          user: it.user,
-          missing: r.missing.map(function (t) { return t.en; }),
-          t: Date.now()
-        };
-      }
-      r.missing.forEach(function (t) {
-        var k = keyOf(t.en);
-        var w = st.artWords[k];
-        if (w && w.st === "learned") return;
-        if (!w || w.st !== "review") out.words++;
-        st.artWords[k] = {
-          w: t.en, m: t.meaning, s: Check.plainEnglish(article.sentences[it.i].en),
-          a: article.id, st: "review", src: w ? w.src : "ceviri", t: Date.now()
-        };
-      });
+  // Bir cümlenin çeviri sonucunu tekrar listesine işler.
+  // 85'in altındaki (boş olmayan) cümle zayıf cümle olarak kaydedilir, 85 ve üstü olan listeden çıkar.
+  // Karşılığı bulunamayan anahtar kelimeler (daha önce "öğrendim" denmemişse) kelime tekrarına eklenir.
+  // meta: { a: makale id'si (kullanıcı cümlesinde "__user"), i: cümle indeksi / kullanıcı kelime id'si }
+  function trackSentence(id, meta, userText, r, enPlain, out) {
+    var st = state();
+    if (r.empty) return;
+    var prev = st.weakSents[id];
+    if (r.score >= 85) {
+      if (prev) { delete st.weakSents[id]; out.cleared++; }
+    } else {
+      if (!prev) out.sents++;
+      st.weakSents[id] = {
+        a: meta.a,
+        i: meta.i,
+        score: r.score,
+        best: Math.max(r.score, prev && prev.best ? prev.best : 0),
+        first: prev && prev.first !== undefined && prev.first !== null ? prev.first : r.score,
+        tries: (prev ? prev.tries || 0 : 0) + 1,
+        user: userText,
+        missing: r.missing.map(function (t) { return t.en; }),
+        t: Date.now()
+      };
+    }
+    r.missing.forEach(function (t) {
+      var k = keyOf(t.en);
+      var w = st.artWords[k];
+      if (w && w.st === "learned") return;
+      if (!w || w.st !== "review") out.words++;
+      st.artWords[k] = {
+        w: t.en, m: t.meaning, s: enPlain,
+        a: meta.a, st: "review", src: w ? w.src : "ceviri", t: Date.now()
+      };
     });
+  }
+
+  // items: [{ i: cümle indeksi, user: kullanıcının metni, result }]
+  function trackResults(article, items) {
+    var out = { sents: 0, words: 0, cleared: 0 };
+    items.forEach(function (it) {
+      trackSentence(article.id + ":" + it.i, { a: article.id, i: it.i }, it.user, it.result,
+        Check.plainEnglish(article.sentences[it.i].en), out);
+    });
+    app.save();
+    return out;
+  }
+
+  // Kullanıcının eklediği kelimeyi örnek cümlede {{kelime|anlam}} olarak işaretler.
+  function markWord(sentence, word, meaning) {
+    var safeMeaning = String(meaning).replace(/[{}|]/g, " ");
+    var re = app.wordRegex(word);
+    var m = re.exec(sentence);
+    if (!m) return sentence;
+    return sentence.slice(0, m.index) + "{{" + m[0] + "|" + safeMeaning + "}}" + sentence.slice(m.index + m[0].length);
+  }
+
+  // Tekrar listesindeki bir cümle kimliğini ("makale:indeks" ya da "u:kelimeId") çözer.
+  function resolveSentence(id) {
+    if (id.indexOf("u:") === 0) {
+      var uw = (state().userWords || []).find(function (x) { return x.id === id.slice(2); });
+      if (!uw || !uw.e) return null;
+      return {
+        title: "Eklediğin kelime: " + uw.w,
+        s: { en: markWord(uw.e, uw.w, uw.m), tr: uw.etr || "" },
+        meta: { a: "__user", i: uw.id }
+      };
+    }
+    var parts = id.split(":");
+    var a = findArticle(parts[0]);
+    var idx = parseInt(parts[1], 10);
+    if (!a || !a.sentences[idx]) return null;
+    return { title: a.title, label: a.title + " · Cümle " + (idx + 1), s: a.sentences[idx], meta: { a: a.id, i: idx } };
+  }
+
+  function trackDrill(id, userText, r) {
+    var src = resolveSentence(id);
+    var out = { sents: 0, words: 0, cleared: 0 };
+    if (src) trackSentence(id, src.meta, userText, r, Check.plainEnglish(src.s.en), out);
     app.save();
     return out;
   }
@@ -303,7 +353,9 @@
     find: findArticle,
     band: band,
     sentenceIssues: sentenceIssues,
-    trackResults: trackResults
+    trackResults: trackResults,
+    trackDrill: trackDrill,
+    resolveSentence: resolveSentence
   };
 
   // ---------- Olaylar ----------

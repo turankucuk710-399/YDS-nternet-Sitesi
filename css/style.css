@@ -523,3 +523,46 @@ main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 /* Durum renkleri kartın kenarlığına uygulanır; metnin kendisi normal kalır */
 .sent-review.good, .sent-review.mid, .sent-review.bad { color: var(--text); font-weight: 400; }
 a.btn { text-decoration: none; display: inline-block; }
+
+/* ---- Kelime / soru ekleme ---- */
+.prompt { white-space: pre-line; }
+.tag-mine { background: var(--primary); color: var(--primary-contrast); }
+.add-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.25rem 1.1rem 1rem; margin-bottom: 1rem; }
+.add-panel h2 { margin-top: 0.9rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; margin-bottom: 0.5rem; }
+.add-panel label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; font-weight: 500; }
+.add-panel label.block { margin: 0.5rem 0; }
+.add-panel input[type="text"], .add-panel select, .add-panel textarea {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+.add-panel textarea { resize: vertical; line-height: 1.5; }
+.ex-choices { display: grid; gap: 0.4rem; margin: 0.4rem 0; }
+.ex-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.ex-choice:hover, .ex-choice.active { border-color: var(--primary); }
+.ex-choice.active { box-shadow: inset 3px 0 0 var(--primary); }
+.cq-opt { flex-direction: row !important; align-items: center; gap: 0.5rem !important; margin-bottom: 0.35rem; }
+.cq-opt input[type="text"] { flex: 1; min-width: 0; }
+.cq-opt span { font-weight: 700; color: var(--muted); }
+.bulk { margin-top: 0.75rem; }
+.bulk summary { cursor: pointer; color: var(--primary); font-weight: 500; }
+code { font-family: ui-monospace, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+.blank-num { white-space: nowrap; color: var(--blank); font-weight: 700; }
+.blank-num.is-current { background: var(--sent-bg); border-radius: 4px; padding: 0 3px; }

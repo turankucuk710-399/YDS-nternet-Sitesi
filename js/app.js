@@ -5,7 +5,8 @@
   var QUESTIONS = window.YDS_QUESTIONS || [];
   var CATEGORIES = window.YDS_CATEGORIES || {};
   var LETTERS = ["A", "B", "C", "D", "E"];
-  var TYPE_LABELS = { v: "fiil", n: "isim", adj: "sıfat", adv: "zarf", phr: "öbek fiil", conj: "bağlaç", art: "makale kelimesi" };
+  var TYPE_LABELS = { v: "fiil", n: "isim", adj: "sıfat", adv: "zarf", phr: "öbek fiil", conj: "bağlaç", art: "makale kelimesi", x: "kelime" };
+  var BUILTIN_Q = QUESTIONS.length; // sitenin kendi soruları; kullanıcı soruları bunların arkasına eklenir
   var LEVEL_LABELS = { 1: "Temel", 2: "Orta", 3: "İleri" };
 
   // ---------- Yardımcılar ----------
@@ -31,7 +32,8 @@
   // ---------- Kalıcı durum (localStorage) ----------
   var STORE_KEY = "yds-study-v1";
   function emptyState() {
-    return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {}, qWrong: {} };
+    return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {}, qWrong: {},
+      userWords: [], userQs: [] };
   }
   var state = emptyState();
 
@@ -48,8 +50,50 @@
         state.missedWords = parsed.missedWords || {};
         state.weakSents = parsed.weakSents || {};
         state.qWrong = parsed.qWrong || {};
+        state.userWords = parsed.userWords || [];
+        state.userQs = parsed.userQs || [];
       }
     } catch (e) { /* depolama yoksa bellekte devam et */ }
+    mergeUserContent();
+  }
+
+  // ---------- Kullanıcının eklediği kelimeler ve sorular ----------
+  // Eklenen kelimeler ana kelime listesine (u: true), sorular soru bankasına (uid) katılır;
+  // böylece listede, kartlarda, testlerde ve tekrarda otomatik olarak yer alırlar.
+  function mergeUserContent() {
+    for (var i = WORDS.length - 1; i >= 0; i--) if (WORDS[i].u) WORDS.splice(i, 1);
+    QUESTIONS.length = BUILTIN_Q;
+    state.userWords.forEach(function (uw) {
+      WORDS.push({ w: uw.w, t: uw.t || "x", lvl: 0, m: uw.m, e: uw.e || "", u: true, id: uw.id });
+    });
+    state.userQs.forEach(function (uq) { QUESTIONS.push(uq); });
+  }
+
+  // Soru anahtarı: sitenin soruları için sıra numarası, kullanıcı soruları için "u" + kimlik.
+  // Kullanıcı soruları kalıcı bir anahtarla tutulur; site soruları çoğalsa da cevaplar karışmaz.
+  function qKey(i) {
+    var q = QUESTIONS[i];
+    return q && q.uid ? "u" + q.uid : String(i);
+  }
+  function qIndex(key) {
+    key = String(key);
+    if (key.charAt(0) === "u") {
+      for (var i = BUILTIN_Q; i < QUESTIONS.length; i++) if ("u" + QUESTIONS[i].uid === key) return i;
+      return -1;
+    }
+    var n = parseInt(key, 10);
+    return n >= 0 && n < BUILTIN_Q ? n : -1;
+  }
+
+  // Bir kelimeyi (çekimli hâlleriyle) cümlede bulan düzenli ifade: "pose" → poses, posed, posing
+  function wordRegex(word) {
+    var parts = String(word).trim().toLowerCase().split(/\s+/).map(function (p) {
+      return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    });
+    var first = parts[0].replace(/e$/, "");
+    parts[0] = first + "(?:e|es|s|ed|d|ing|ies|ied)?";
+    if (parts.length > 1) parts[0] = "(?:" + parts[0] + "|" + first + "e?)";
+    return new RegExp("\\b" + parts.join("\\s+") + "\\b", "i");
   }
 
   function save() {
@@ -98,7 +142,7 @@
     save();
   }
 
-  var SRC_LABELS = { makale: "Makale", ceviri: "Çeviri hatası", test: "Kelime testi", kart: "Kartlar", soru: "Soru Bankası", liste: "Kelime listesi" };
+  var SRC_LABELS = { makale: "Makale", ceviri: "Çeviri hatası", test: "Kelime testi", kart: "Kartlar", soru: "Soru Bankası", liste: "Kelime listesi", eklenen: "Eklediğim" };
 
   // Bir seçenek metnini ana kelime listesindeki kelimeyle eşleştirir ("poses" → "pose", "Despite" → "despite").
   function matchWord(text) {
@@ -112,12 +156,13 @@
   // Soru Bankası cevabını kaydeder; yanlışsa soruyu ve (kelime/bağlaç sorusuysa) doğru cevaptaki kelimeyi tekrara ekler.
   function recordAnswer(i, ok, chosen) {
     var q = QUESTIONS[i];
-    state.answers[i] = ok;
+    var key = qKey(i);
+    state.answers[key] = ok;
     if (ok) {
-      delete state.qWrong[i];
+      delete state.qWrong[key];
     } else {
-      var prev = state.qWrong[i] || { n: 0 };
-      state.qWrong[i] = { n: prev.n + 1, t: Date.now(), c: chosen };
+      var prev = state.qWrong[key] || { n: 0 };
+      state.qWrong[key] = { n: prev.n + 1, t: Date.now(), c: chosen };
       if (q && (q.cat === "kelime" || q.cat === "baglac")) {
         var w = matchWord(q.o[q.a]);
         if (w) { setKnown(w, false, "soru"); return; }
@@ -146,7 +191,7 @@
   function weakSentenceCount() { return Object.keys(state.weakSents).length; }
 
   function wrongQuestionCount() {
-    return Object.keys(state.answers).filter(function (k) { return state.answers[k] === false; }).length;
+    return Object.keys(state.answers).filter(function (k) { return state.answers[k] === false && qIndex(k) >= 0; }).length;
   }
 
   // ---------- Tema ----------
@@ -230,6 +275,7 @@
       if (type && w.t !== type) return false;
       if (lvl && String(w.lvl) !== lvl) return false;
       if (status === "known" && !isKnown(w)) return false;
+      if (status === "mine" && !w.u) return false;
       if (status === "unknown" && isKnown(w)) return false;
       if (q && trLower(w.w).indexOf(q) === -1 && trLower(w.m).indexOf(q) === -1) return false;
       return true;
@@ -240,12 +286,14 @@
       var known = isKnown(w);
       return '<article class="word' + (known ? " is-known" : "") + '">' +
         '<div class="word-head"><h3>' + esc(w.w) + '</h3>' +
-        '<span class="tag">' + TYPE_LABELS[w.t] + '</span>' +
-        '<span class="tag tag-lvl' + w.lvl + '">' + LEVEL_LABELS[w.lvl] + "</span>" +
+        '<span class="tag">' + (TYPE_LABELS[w.t] || "kelime") + '</span>' +
+        (w.u ? '<span class="tag tag-mine">Eklediğim</span>' : '<span class="tag tag-lvl' + w.lvl + '">' + LEVEL_LABELS[w.lvl] + "</span>") +
         '<button class="mark" data-word="' + esc(w.w) + '" aria-pressed="' + known + '" title="Bildiklerime ekle/çıkar">' +
         (known ? "✓ Biliyorum" : "+ Biliyorum") + "</button></div>" +
         '<p class="meaning">' + esc(w.m) + "</p>" +
-        '<p class="example">' + esc(w.e) + "</p></article>";
+        (w.e ? '<p class="example">' + esc(w.e) + "</p>" : "") +
+        (w.u ? '<button class="linkish small" data-del-word="' + esc(w.id) + '">Bu kelimeyi sil</button>' : "") +
+        "</article>";
     }).join("") : '<p class="empty">Aramana uygun kelime bulunamadı.</p>';
   }
 
@@ -254,6 +302,8 @@
       $(id).addEventListener("input", renderWords);
     });
     $("wordList").addEventListener("click", function (e) {
+      var del = e.target.closest("[data-del-word]");
+      if (del) { if (window.YDSCustom) window.YDSCustom.deleteWord(del.getAttribute("data-del-word")); return; }
       var btn = e.target.closest(".mark");
       if (!btn) return;
       var w = WORDS.find(function (x) { return x.w === btn.getAttribute("data-word"); });
@@ -349,7 +399,7 @@
         (it.label ? '<span class="tag">' + esc(it.label) + "</span>" : "") +
         "<span>Doğru: " + score + "</span></div>" +
         '<div class="bar"><span style="width:' + Math.round((pos / items.length) * 100) + '%"></span></div>' +
-        (it.passage ? '<div class="passage">' + esc(it.passage) + "</div>" : "") +
+        (it.passage ? '<div class="passage">' + passageHtml(it.passage, it.prompt) + "</div>" : "") +
         '<p class="prompt">' + highlightBlank(esc(it.prompt)) + "</p>" +
         '<div class="options">' + it.options.map(function (o, i) {
           return '<button class="option" data-i="' + i + '"><span class="letter">' + LETTERS[i] + ")</span> " + esc(o) + "</button>";
@@ -404,6 +454,14 @@
     }
 
     render();
+  }
+
+  // Paragraftaki boşlukları vurgular; soru "(3) numaralı boşluk…" ise o boşluk ayrıca işaretlenir
+  function passageHtml(passage, prompt) {
+    var cur = /^\((\d+)\)/.exec(prompt || "");
+    return esc(passage).replace(/\((\d+)\)\s*----/g, function (m, n) {
+      return '<span class="blank-num' + (cur && cur[1] === n ? " is-current" : "") + '">(' + n + ')&nbsp;______</span>';
+    }).replace(/----/g, '<span class="blank">______</span>');
   }
 
   function highlightBlank(html) {
@@ -467,21 +525,29 @@
   }
 
   // ---------- Soru bankası ----------
+  var refreshCats = null;
+
   function initQuestions() {
     var sel = $("qCat");
-    var counts = {};
-    QUESTIONS.forEach(function (q) { counts[q.cat] = (counts[q.cat] || 0) + 1; });
-    sel.innerHTML = '<option value="">Tüm kategoriler (' + QUESTIONS.length + ")</option>" +
-      '<option value="__wrong">Yanlış yaptıklarım</option>' +
-      Object.keys(CATEGORIES).map(function (k) {
-        return '<option value="' + k + '">' + esc(CATEGORIES[k]) + " (" + (counts[k] || 0) + ")</option>";
-      }).join("");
+    refreshCats = function () {
+      var counts = {}, mine = 0, prev = sel.value;
+      QUESTIONS.forEach(function (q) { counts[q.cat] = (counts[q.cat] || 0) + 1; if (q.uid) mine++; });
+      sel.innerHTML = '<option value="">Tüm kategoriler (' + QUESTIONS.length + ")</option>" +
+        '<option value="__wrong">Yanlış yaptıklarım</option>' +
+        (mine ? '<option value="__mine">Eklediğim sorular (' + mine + ")</option>" : "") +
+        Object.keys(CATEGORIES).map(function (k) {
+          return '<option value="' + k + '">' + esc(CATEGORIES[k]) + " (" + (counts[k] || 0) + ")</option>";
+        }).join("");
+      if (sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
+    };
+    refreshCats();
 
     function start() {
       var cat = sel.value;
       var pool = [];
       QUESTIONS.forEach(function (q, i) {
-        if (cat === "__wrong") { if (state.answers[i] === false) pool.push(i); }
+        if (cat === "__wrong") { if (state.answers[qKey(i)] === false) pool.push(i); }
+        else if (cat === "__mine") { if (q.uid) pool.push(i); }
         else if (!cat || q.cat === cat) pool.push(i);
       });
       if ($("qShuffle").checked) pool = shuffle(pool);
@@ -518,6 +584,13 @@
     weakSentenceCount: weakSentenceCount,
     wrongQuestionCount: wrongQuestionCount,
     srcLabels: SRC_LABELS,
+    questions: QUESTIONS,
+    qKey: qKey,
+    qIndex: qIndex,
+    wordRegex: wordRegex,
+    mergeUserContent: mergeUserContent,
+    renderWords: renderWords,
+    refreshQuestionCats: function () { if (refreshCats) refreshCats(); },
     recordAnswer: recordAnswer,
     runQuiz: runQuiz,
     registerRoute: function (name, fn) { routes[name] = fn; }
@@ -535,7 +608,11 @@
     (window.YDS_MODULES || []).forEach(function (fn) { fn(window.YDSApp); });
     $("resetProgress").addEventListener("click", function () {
       if (!confirm("Tüm ilerlemen (bildiğin kelimeler, tekrar listen, soru ve çeviri sonuçları) silinecek. Emin misin?")) return;
+      // Eklediğin kelimeler ve sorular ilerleme sayılmaz; sıfırlamada korunur
+      var keepWords = state.userWords, keepQs = state.userQs;
       state = emptyState();
+      state.userWords = keepWords;
+      state.userQs = keepQs;
       save();
       route();
     });

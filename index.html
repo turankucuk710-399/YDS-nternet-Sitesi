@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=5">
+  <link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
   <header class="topbar">
@@ -78,7 +78,42 @@
           <option value="">Hepsi</option>
           <option value="known">Bildiklerim</option>
           <option value="unknown">Öğreneceklerim</option>
+          <option value="mine">Eklediklerim</option>
         </select>
+        <button class="btn btn-primary" id="cwToggle" aria-expanded="false">+ Kelime ekle</button>
+      </div>
+
+      <div class="add-panel" id="cwPanel" hidden>
+        <h2>Kelime ekle</h2>
+        <p class="muted small">Eklediğin kelime otomatik olarak kelime listesine, kartlara, kelime testine ve Tekrar'a girer. Örnek cümlesi de Tekrar → Çeviri cümleleri'ne eklenir. Örnek cümle yazmazsan site kendi makale ve sorularında bu kelimeyi içeren bir cümle arar.</p>
+        <div class="form-grid">
+          <label>İngilizce kelime / ifade<input type="text" id="cwWord" placeholder="ör. perpetuate" autocomplete="off"></label>
+          <label>Türkçe anlamı<input type="text" id="cwMeaning" placeholder="ör. sürdürmek, devam ettirmek" autocomplete="off"></label>
+          <label>Türü
+            <select id="cwType">
+              <option value="x">Belirtme</option>
+              <option value="v">Fiil</option>
+              <option value="n">İsim</option>
+              <option value="adj">Sıfat</option>
+              <option value="adv">Zarf</option>
+              <option value="phr">Öbek fiil</option>
+              <option value="conj">Bağlaç / bağlayıcı</option>
+            </select>
+          </label>
+        </div>
+        <div id="cwHelp"></div>
+        <div id="cwSuggest" class="ex-choices"></div>
+        <label class="block">Örnek cümle (isteğe bağlı)<textarea id="cwEx" rows="2" placeholder="Boş bırakırsan sitedeki bir cümle otomatik seçilir"></textarea></label>
+        <label class="block">Cümlenin Türkçesi (isteğe bağlı; çeviri kontrolü için)<textarea id="cwExTr" rows="2"></textarea></label>
+        <div class="toolbar"><button class="btn btn-primary" id="cwSave">Kaydet</button></div>
+        <div id="cwMsg"></div>
+        <details class="bulk">
+          <summary>Toplu ekle (her satıra bir kelime)</summary>
+          <p class="muted small">Her satırı <code>kelime = anlam</code> biçiminde yaz. Örnek cümleler sitede otomatik aranır.</p>
+          <textarea id="cwBulk" rows="5" placeholder="perpetuate = sürdürmek&#10;alleviate = hafifletmek&#10;run into = karşılaşmak"></textarea>
+          <div class="toolbar"><button class="btn" id="cwBulkSave">Hepsini ekle</button></div>
+          <div id="cwBulkMsg"></div>
+        </details>
       </div>
       <p class="muted" id="wordCount"></p>
       <div class="word-list" id="wordList"></div>
@@ -141,6 +176,26 @@
         <select id="qCat"></select>
         <label class="check"><input type="checkbox" id="qShuffle" checked> Soruları karıştır</label>
         <button class="btn btn-primary" id="qStart">Başla</button>
+        <button class="btn" id="cqToggle" aria-expanded="false">+ Soru ekle</button>
+      </div>
+
+      <div class="add-panel" id="cqPanel" hidden>
+        <h2>Soru ekle</h2>
+        <p class="muted small">Kitaplarındaki ya da kendi hazırladığın soruları buraya ekleyebilirsin. Eklediğin sorular <strong>yalnızca bu tarayıcıda saklanır</strong>, siteye ya da başkalarına gitmez. Yanlış yaptığında diğer sorular gibi Tekrar'a düşer.</p>
+        <div class="form-grid">
+          <label>Kategori<select id="cqCat"></select></label>
+        </div>
+        <label class="block">Okuma parçası (isteğe bağlı)<textarea id="cqPassage" rows="3" placeholder="Okuma ya da paragraf sorusuysa metni buraya yapıştır"></textarea></label>
+        <label class="block">Soru<textarea id="cqText" rows="3" placeholder="Boşluk için ---- yazabilirsin"></textarea></label>
+        <p class="small muted">Seçenekler (doğru olanı işaretle):</p>
+        <div id="cqOptions"></div>
+        <label class="block">Açıklama (isteğe bağlı)<textarea id="cqExplain" rows="2"></textarea></label>
+        <div class="toolbar"><button class="btn btn-primary" id="cqSave">Soruyu kaydet</button></div>
+        <div id="cqMsg"></div>
+        <details class="bulk">
+          <summary>Eklediğim sorular (<span id="cqMineCount">0</span>)</summary>
+          <ul class="review-list" id="cqMine"></ul>
+        </details>
       </div>
       <div id="qBody"></div>
     </section>
@@ -191,12 +246,14 @@
     <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=5"></script>
-  <script src="js/data/questions.js?v=5"></script>
-  <script src="js/data/articles.js?v=5"></script>
-  <script src="js/translate-check.js?v=5"></script>
-  <script src="js/articles.js?v=5"></script>
-  <script src="js/review.js?v=5"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/data/words.js?v=6"></script>
+  <script src="js/data/questions.js?v=6"></script>
+  <script src="js/data/questions-extra.js?v=6"></script>
+  <script src="js/data/articles.js?v=6"></script>
+  <script src="js/translate-check.js?v=6"></script>
+  <script src="js/articles.js?v=6"></script>
+  <script src="js/review.js?v=6"></script>
+  <script src="js/custom.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>
