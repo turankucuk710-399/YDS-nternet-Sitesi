@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YDS Çalışma</title>
+  <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#home" class="brand">YDS<span>Çalışma</span></a>
+    <nav class="nav" id="nav">
+      <a href="#home" data-route="home">Ana Sayfa</a>
+      <a href="#words" data-route="words">Kelimeler</a>
+      <a href="#cards" data-route="cards">Kartlar</a>
+      <a href="#vocab-quiz" data-route="vocab-quiz">Kelime Testi</a>
+      <a href="#questions" data-route="questions">Soru Bankası</a>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Tema değiştir" title="Açık / koyu tema">☾</button>
+  </header>
+
+  <main id="app">
+    <!-- Ana Sayfa -->
+    <section class="view" id="view-home">
+      <div class="hero">
+        <h1>YDS'ye hazırlan, her gün biraz daha.</h1>
+        <p>Sınavda en sık çıkan kelimeleri öğren, kartlarla tekrar et ve YDS formatındaki sorularla kendini dene.</p>
+      </div>
+      <div class="stats" id="homeStats"></div>
+      <div class="grid">
+        <a class="tile" href="#words"><h3>Kelime Listesi</h3><p>Fiiller, isimler, sıfatlar, öbek fiiller ve bağlaçlar — anlam ve örnek cümleleriyle.</p></a>
+        <a class="tile" href="#cards"><h3>Kelime Kartları</h3><p>Kartı çevir, bildiklerini işaretle. Bilmediklerin tekrar karşına çıksın.</p></a>
+        <a class="tile" href="#vocab-quiz"><h3>Kelime Testi</h3><p>Rastgele oluşturulan çoktan seçmeli sorularla kelime bilgini ölç.</p></a>
+        <a class="tile" href="#questions"><h3>Soru Bankası</h3><p>Kelime, dil bilgisi, bağlaç, cümle tamamlama, çeviri, okuma ve paragraf soruları.</p></a>
+      </div>
+      <div class="tips">
+        <h2>YDS hakkında kısa bilgiler</h2>
+        <ul>
+          <li>Sınav <strong>80 soru</strong>dan oluşur ve süre <strong>180 dakika</strong>dır. Her soru 1,25 puandır; yanlışlar doğruları götürmez.</li>
+          <li>Soruların büyük bölümü <strong>kelime bilgisi</strong>ne dayanır. Okuma ve çeviri soruları da güçlü bir kelime hazinesi ister.</li>
+          <li>Bağlaçlarda boşluktan sonra gelen yapıya bak: <em>despite / due to</em> + isim, <em>although / because</em> + cümle.</li>
+          <li>Zaman uyumu (tense) çoğu dil bilgisi sorusunun anahtarıdır: <em>since</em> → Present Perfect, <em>by the time</em> + Past → Past Perfect.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Kelimeler -->
+    <section class="view" id="view-words" hidden>
+      <h1>Kelime Listesi</h1>
+      <div class="toolbar">
+        <input type="search" id="wordSearch" placeholder="Kelime veya anlam ara…" autocomplete="off">
+        <select id="wordType">
+          <option value="">Tüm türler</option>
+          <option value="v">Fiil</option>
+          <option value="n">İsim</option>
+          <option value="adj">Sıfat</option>
+          <option value="adv">Zarf</option>
+          <option value="phr">Öbek fiil</option>
+          <option value="conj">Bağlaç / bağlayıcı</option>
+        </select>
+        <select id="wordLevel">
+          <option value="">Tüm seviyeler</option>
+          <option value="1">Temel</option>
+          <option value="2">Orta</option>
+          <option value="3">İleri</option>
+        </select>
+        <select id="wordStatus">
+          <option value="">Hepsi</option>
+          <option value="known">Bildiklerim</option>
+          <option value="unknown">Öğreneceklerim</option>
+        </select>
+      </div>
+      <p class="muted" id="wordCount"></p>
+      <div class="word-list" id="wordList"></div>
+    </section>
+
+    <!-- Kartlar -->
+    <section class="view" id="view-cards" hidden>
+      <h1>Kelime Kartları</h1>
+      <div class="toolbar">
+        <select id="cardSet">
+          <option value="unknown">Henüz bilmediklerim</option>
+          <option value="all">Tüm kelimeler</option>
+          <option value="v">Fiiller</option>
+          <option value="n">İsimler</option>
+          <option value="adj">Sıfatlar</option>
+          <option value="adv">Zarflar</option>
+          <option value="phr">Öbek fiiller</option>
+          <option value="conj">Bağlaçlar</option>
+        </select>
+        <label class="check"><input type="checkbox" id="cardReverse"> Türkçeden başla</label>
+      </div>
+      <p class="muted" id="cardProgress"></p>
+      <div class="card-wrap">
+        <button class="flashcard" id="flashcard" aria-live="polite">
+          <div class="card-face card-front" id="cardFront"></div>
+          <div class="card-face card-back" id="cardBack"></div>
+        </button>
+      </div>
+      <p class="muted center">Kartı çevirmek için tıkla veya <kbd>Boşluk</kbd> tuşuna bas.</p>
+      <div class="card-actions">
+        <button class="btn btn-bad" id="cardUnknown">Bilmiyorum <kbd>←</kbd></button>
+        <button class="btn btn-good" id="cardKnown">Biliyorum <kbd>→</kbd></button>
+      </div>
+    </section>
+
+    <!-- Kelime Testi -->
+    <section class="view" id="view-vocab-quiz" hidden>
+      <h1>Kelime Testi</h1>
+      <div class="toolbar" id="vqSetup">
+        <select id="vqCount">
+          <option value="10">10 soru</option>
+          <option value="20" selected>20 soru</option>
+          <option value="40">40 soru</option>
+        </select>
+        <select id="vqDir">
+          <option value="en">İngilizce → Türkçe</option>
+          <option value="tr">Türkçe → İngilizce</option>
+          <option value="mix">Karışık</option>
+        </select>
+        <button class="btn btn-primary" id="vqStart">Testi başlat</button>
+      </div>
+      <div id="vqBody"></div>
+    </section>
+
+    <!-- Soru Bankası -->
+    <section class="view" id="view-questions" hidden>
+      <h1>Soru Bankası</h1>
+      <div class="toolbar" id="qSetup">
+        <select id="qCat"></select>
+        <label class="check"><input type="checkbox" id="qShuffle" checked> Soruları karıştır</label>
+        <button class="btn btn-primary" id="qStart">Başla</button>
+      </div>
+      <div id="qBody"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
+  </footer>
+
+  <script src="js/data/words.js"></script>
+  <script src="js/data/questions.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
