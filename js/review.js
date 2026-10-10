@@ -18,19 +18,21 @@
   function weakList() {
     var st = state();
     return Object.keys(st.weakSents).map(function (id) {
-      var w = st.weakSents[id];
-      var a = Art().find(w.a);
-      if (!a || !a.sentences[w.i]) return null;
-      return { id: id, w: w, article: a, s: a.sentences[w.i] };
+      var src = Art().resolveSentence(id);
+      if (!src) return null;
+      return { id: id, w: st.weakSents[id], src: src, s: src.s };
     }).filter(Boolean).sort(function (x, y) {
-      return sentSort === "score" ? x.w.score - y.w.score : y.w.t - x.w.t;
+      // Henüz çevrilmemiş (puanı olmayan) cümleler en başta
+      var sx = x.w.score === null || x.w.score === undefined ? -1 : x.w.score;
+      var sy = y.w.score === null || y.w.score === undefined ? -1 : y.w.score;
+      return sentSort === "score" ? sx - sy : y.w.t - x.w.t;
     });
   }
 
   function wrongQuestions() {
     var st = state(), qs = window.YDS_QUESTIONS || [];
-    return Object.keys(st.answers).filter(function (k) { return st.answers[k] === false && qs[k]; })
-      .map(function (k) { return { i: +k, q: qs[k], meta: st.qWrong[k] || { n: 1, t: 0 } }; })
+    return Object.keys(st.answers).filter(function (k) { return st.answers[k] === false && app.qIndex(k) >= 0; })
+      .map(function (k) { var i = app.qIndex(k); return { i: i, q: qs[i], meta: st.qWrong[k] || { n: 1, t: 0 } }; })
       .sort(function (a, b) { return b.meta.t - a.meta.t; });
   }
 
@@ -63,13 +65,19 @@
   function renderSources() {
     var words = app.reviewWords();
     function n(src) { return words.filter(function (w) { return w.src === src; }).length; }
+    var userSents = Object.keys(state().weakSents).filter(function (id) { return id.indexOf("u:") === 0; }).length;
+    var artSents = app.weakSentenceCount() - userSents;
     var cards = [
       { label: "Kelime Testi", count: n("test"), sub: "yanlış cevaplanan kelime", go: "words|test" },
       { label: "Kartlar", count: n("kart"), sub: "\"Bilmiyorum\" denen kelime", go: "words|kart" },
       { label: "Soru Bankası", count: app.wrongQuestionCount(), sub: "yanlış soru" + (n("soru") ? " · " + n("soru") + " kelime" : ""), go: "questions|" },
-      { label: "Makale Çeviri", count: app.weakSentenceCount() + n("makale") + n("ceviri"),
-        sub: app.weakSentenceCount() + " cümle · " + (n("makale") + n("ceviri")) + " kelime", go: app.weakSentenceCount() ? "sents|" : "words|ceviri" }
+      { label: "Makale Çeviri", count: artSents + n("makale") + n("ceviri"),
+        sub: artSents + " cümle · " + (n("makale") + n("ceviri")) + " kelime", go: artSents ? "sents|" : "words|ceviri" }
     ];
+    if (n("eklenen") || userSents) {
+      cards.push({ label: "Eklediklerim", count: n("eklenen") + userSents,
+        sub: n("eklenen") + " kelime · " + userSents + " cümle", go: n("eklenen") ? "words|eklenen" : "sents|" });
+    }
     if (n("liste")) cards.push({ label: "Kelime Listesi", count: n("liste"), sub: "öğrenilecek kelime", go: "words|liste" });
     $("revSources").innerHTML = '<div class="rev-sources-title">Nereden geldi?</div><div class="rev-sources-grid">' +
       cards.map(function (c) {
@@ -106,13 +114,14 @@
       '<select id="revSort"><option value="score"' + (sentSort === "score" ? " selected" : "") + '>En düşük puan önce</option>' +
       '<option value="recent"' + (sentSort === "recent" ? " selected" : "") + ">En yeni önce</option></select></div>" +
       '<div class="rev-list">' + list.map(function (x) {
-        var b = Art().band(x.w.score);
+        var isNew = x.w.score === null || x.w.score === undefined;
+        var b = isNew ? "mid" : Art().band(x.w.score);
         return '<div class="rev-item sent-review ' + b + '">' +
-          '<div class="sent-review-head"><span>' + esc(x.article.title) + " · Cümle " + (x.w.i + 1) + "</span>" +
-          '<span class="score-pill ' + b + '">' + x.w.score + "</span></div>" +
+          '<div class="sent-review-head"><span>' + esc(x.src.label || x.src.title) + "</span>" +
+          '<span class="score-pill ' + b + '">' + (isNew ? "Yeni" : x.w.score) + "</span></div>" +
           '<p class="sr-en">' + esc(Check.plainEnglish(x.s.en)) + "</p>" +
-          '<p class="muted small">' + x.w.tries + " deneme · en iyi puan " + x.w.best +
-          (x.w.first !== undefined && x.w.best > x.w.first ? " · ilk puan " + x.w.first + " → gelişme +" + (x.w.best - x.w.first) : "") + "</p>" +
+          '<p class="muted small">' + (isNew ? "Henüz çevirmedin" : x.w.tries + " deneme · en iyi puan " + x.w.best +
+          (x.w.first !== undefined && x.w.first !== null && x.w.best > x.w.first ? " · ilk puan " + x.w.first + " → gelişme +" + (x.w.best - x.w.first) : "")) + "</p>" +
           (x.w.missing && x.w.missing.length ? '<div class="chips">' + x.w.missing.map(function (m) {
             return '<span class="chip">' + esc(m) + "</span>";
           }).join("") + "</div>" : "") +
@@ -237,21 +246,21 @@
     if (drill.pos >= drill.ids.length) return finishDrill();
     var id = drill.ids[drill.pos];
     var w = state().weakSents[id];
-    var parts = id.split(":");
-    var article = Art().find(parts[0]);
-    var idx = parseInt(parts[1], 10);
-    var s = article.sentences[idx];
+    var src = Art().resolveSentence(id);
+    if (!src) { drill.pos++; return renderDrill(); }
+    var s = src.s;
     var terms = Check.parseTerms(s.en);
+    var hasScore = w && w.score !== null && w.score !== undefined;
     drill.checked = false;
 
     $("revBody").innerHTML =
       '<div class="quiz-meta"><span>Cümle ' + (drill.pos + 1) + " / " + drill.ids.length + "</span>" +
-      '<span class="tag">' + esc(article.title) + "</span>" +
+      '<span class="tag">' + esc(src.title) + "</span>" +
       '<button class="linkish" data-drill-exit="1">Listeye dön</button></div>' +
       '<div class="bar"><span style="width:' + Math.round((drill.pos / drill.ids.length) * 100) + '%"></span></div>' +
       '<div class="drill-card">' +
       '<p class="drill-en">' + sentenceHtml(s.en) + "</p>" +
-      (w ? '<p class="muted small">Önceki puanın: <span class="score-pill ' + Art().band(w.score) + '">' + w.score + "</span> · " + w.tries + " deneme</p>" : "") +
+      (hasScore ? '<p class="muted small">Önceki puanın: <span class="score-pill ' + Art().band(w.score) + '">' + w.score + "</span> · " + w.tries + " deneme</p>" : "") +
       '<details class="drill-hints"><summary>İpuçları: anahtar kelimelerin anlamları</summary><ul>' +
       terms.map(function (t) { return "<li><strong>" + esc(t.en) + "</strong> — " + esc(t.meaning) + "</li>"; }).join("") +
       "</ul></details>" +
@@ -268,17 +277,14 @@
     var text = $("drillInput").value;
     if (!text.trim()) { $("drillResult").innerHTML = '<p class="empty">Önce çevirini yaz.</p>'; return; }
     var id = drill.ids[drill.pos];
-    var parts = id.split(":");
-    var article = Art().find(parts[0]);
-    var idx = parseInt(parts[1], 10);
-    var s = article.sentences[idx];
+    var s = Art().resolveSentence(id).s;
     var prev = state().weakSents[id];
-    var prevScore = prev ? prev.score : 0;
+    var prevScore = prev && prev.score ? prev.score : 0;
 
     var res = Check.check({ sentences: [s] }, text).sentences[0];
     res.user = text.trim();
     var r = res.result;
-    Art().trackResults(article, [{ i: idx, user: res.user, result: r }]);
+    Art().trackDrill(id, res.user, r);
     if (r.score >= 85) drill.cleared++;
     else if (r.score > prevScore) drill.improved++;
     drill.checked = true;
@@ -289,9 +295,9 @@
       '<div class="sent-review-head"><span>Sonuç</span><span class="score-pill ' + b + '">' + r.score + "</span></div>" +
       (r.score >= 85
         ? '<p class="ok">✓ Harika! Bu cümleyi doğru çevirdin; tekrar listenden çıkarıldı.</p>'
-        : '<p class="muted small">' + (r.score > prevScore ? "Önceki puanından (" + prevScore + ") daha iyi. 👏 " : "") +
+        : '<p class="muted small">' + (prev && prev.score && r.score > prevScore ? "Önceki puanından (" + prevScore + ") daha iyi. 👏 " : "") +
           "85 ve üstü puan aldığında cümle listenden çıkar.</p>") +
-      '<p><span class="sr-label">Örnek çeviri:</span> ' + esc(s.tr) + "</p>" +
+      (s.tr ? '<p><span class="sr-label">Örnek çeviri:</span> ' + esc(s.tr) + "</p>" : "") +
       '<ul class="sr-issues">' + Art().sentenceIssues(r).map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul>" +
       "</div>" +
       '<div class="toolbar">' +

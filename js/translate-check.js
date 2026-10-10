@@ -93,13 +93,20 @@
   // Tek bir örnek cümleyi, kullanıcının ona eşlenen metniyle karşılaştırır.
   function scoreSentence(ref, userText, englishWords) {
     var userToks = tokens(userText);
-    var res = { score: 0, missing: [], found: [], untranslated: [], short: false, long: false, empty: false, lowOverlap: false };
+    var res = { score: 0, missing: [], found: [], untranslated: [], short: false, long: false, empty: false, lowOverlap: false, noRef: false };
     if (!userToks.length) { res.empty = true; return res; }
 
     ref.terms.forEach(function (t) {
       (termFound(t, userToks) ? res.found : res.missing).push(t);
     });
     var coverage = ref.terms.length ? res.found.length / ref.terms.length : null;
+
+    // Örnek çevirisi olmayan cümle (kullanıcının eklediği kelimeler): yalnızca anahtar kelimeye bakılır
+    if (!normalize(ref.tr)) {
+      res.noRef = true;
+      res.score = Math.round((coverage === null ? 1 : coverage) * 100);
+      return res;
+    }
 
     var refKeys = ref.keys;
     var userKeySet = {};
