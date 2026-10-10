@@ -30,6 +30,7 @@ window.YDS_WORDS = [
   { w: "deplete", t: "v", lvl: 3, m: "tüketmek, azaltmak", e: "Overfishing has depleted fish stocks." },
   { w: "deprive", t: "v", lvl: 2, m: "yoksun bırakmak", e: "Many children are deprived of basic education." },
   { w: "derive", t: "v", lvl: 2, m: "elde etmek, türemek", e: "Many medicines are derived from plants." },
+  { w: "determine", t: "v", lvl: 1, m: "belirlemek, saptamak", e: "Researchers are trying to determine the cause of the outbreak." },
   { w: "deteriorate", t: "v", lvl: 2, m: "kötüleşmek", e: "His health deteriorated rapidly." },
   { w: "diminish", t: "v", lvl: 2, m: "azalmak, azaltmak", e: "The pain gradually diminished." },
   { w: "disrupt", t: "v", lvl: 2, m: "bozmak, sekteye uğratmak", e: "The strike disrupted public transport." },
