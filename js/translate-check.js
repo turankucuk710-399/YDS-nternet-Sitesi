@@ -84,7 +84,8 @@
 
   function splitSentences(text) {
     return String(text)
-      .split(/(?<=[.!?…;])\s+|\n+/)
+      .replace(/([.!?…;])\s+/g, "$1\n") // eski Safari sürümleri lookbehind desteklemiyor
+      .split(/\n+/)
       .map(function (s) { return s.trim(); })
       .filter(function (s) { return normalize(s).length > 0; });
   }
