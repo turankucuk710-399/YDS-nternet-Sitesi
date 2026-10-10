@@ -31,7 +31,7 @@
   // ---------- Kalıcı durum (localStorage) ----------
   var STORE_KEY = "yds-study-v1";
   function emptyState() {
-    return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {} };
+    return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {}, qWrong: {} };
   }
   var state = emptyState();
 
@@ -47,6 +47,7 @@
         state.artScores = parsed.artScores || {};
         state.missedWords = parsed.missedWords || {};
         state.weakSents = parsed.weakSents || {};
+        state.qWrong = parsed.qWrong || {};
       }
     } catch (e) { /* depolama yoksa bellekte devam et */ }
   }
@@ -97,7 +98,33 @@
     save();
   }
 
-  var SRC_LABELS = { makale: "Makale", ceviri: "Çeviri hatası", test: "Kelime testi", kart: "Kartlar", liste: "Kelime listesi" };
+  var SRC_LABELS = { makale: "Makale", ceviri: "Çeviri hatası", test: "Kelime testi", kart: "Kartlar", soru: "Soru Bankası", liste: "Kelime listesi" };
+
+  // Bir seçenek metnini ana kelime listesindeki kelimeyle eşleştirir ("poses" → "pose", "Despite" → "despite").
+  function matchWord(text) {
+    var t = String(text).toLowerCase().replace(/[^a-z\s-]/g, "").trim();
+    if (!t) return null;
+    return WORDS.find(function (x) { return x.w === t; }) ||
+      WORDS.find(function (x) { return x.w.length >= 4 && t.indexOf(x.w) === 0 && t.length - x.w.length <= 3 && t.indexOf(" ") === -1; }) ||
+      null;
+  }
+
+  // Soru Bankası cevabını kaydeder; yanlışsa soruyu ve (kelime/bağlaç sorusuysa) doğru cevaptaki kelimeyi tekrara ekler.
+  function recordAnswer(i, ok, chosen) {
+    var q = QUESTIONS[i];
+    state.answers[i] = ok;
+    if (ok) {
+      delete state.qWrong[i];
+    } else {
+      var prev = state.qWrong[i] || { n: 0 };
+      state.qWrong[i] = { n: prev.n + 1, t: Date.now(), c: chosen };
+      if (q && (q.cat === "kelime" || q.cat === "baglac")) {
+        var w = matchWord(q.o[q.a]);
+        if (w) { setKnown(w, false, "soru"); return; }
+      }
+    }
+    save();
+  }
 
   function reviewWords() {
     var seen = {}, list = [];
@@ -339,7 +366,7 @@
       var ok = i === it.answer;
       if (ok) score++;
       results.push({ item: it, chosen: i, ok: ok });
-      if (it.onAnswer) it.onAnswer(ok);
+      if (it.onAnswer) it.onAnswer(ok, i);
 
       container.querySelectorAll(".option").forEach(function (btn) {
         var bi = parseInt(btn.getAttribute("data-i"), 10);
@@ -353,7 +380,7 @@
         '<p class="' + (ok ? "ok" : "bad") + '">' + (ok ? "Doğru!" : "Yanlış. Doğru cevap: " + LETTERS[it.answer] + ")") + "</p>" +
         (it.explain ? '<p class="explain">' + esc(it.explain) + "</p>" : "") +
         '<button class="btn btn-primary" id="quizNext">' + (pos + 1 < items.length ? "Sonraki soru →" : "Sonuçları gör") + "</button>";
-      var next = $("quizNext");
+      var next = container.querySelector("#quizNext");
       next.focus();
       next.addEventListener("click", function () { pos++; render(); });
     }
@@ -373,7 +400,7 @@
             '<span class="ok">Doğru cevap: ' + LETTERS[r.item.answer] + ") " + esc(r.item.options[r.item.answer]) + "</span></p>" +
             (r.item.explain ? '<p class="explain">' + esc(r.item.explain) + "</p>" : "") + "</div>";
         }).join("") : "");
-      $("quizAgain").addEventListener("click", opts.onRestart);
+      container.querySelector("#quizAgain").addEventListener("click", opts.onRestart);
     }
 
     render();
@@ -472,7 +499,7 @@
           options: q.o,
           answer: q.a,
           explain: q.x,
-          onAnswer: function (ok) { state.answers[i] = ok; save(); }
+          onAnswer: function (ok, chosen) { recordAnswer(i, ok, chosen); }
         };
       });
       runQuiz($("qBody"), items, { onRestart: start });
@@ -491,6 +518,7 @@
     weakSentenceCount: weakSentenceCount,
     wrongQuestionCount: wrongQuestionCount,
     srcLabels: SRC_LABELS,
+    recordAnswer: recordAnswer,
     runQuiz: runQuiz,
     registerRoute: function (name, fn) { routes[name] = fn; }
   };

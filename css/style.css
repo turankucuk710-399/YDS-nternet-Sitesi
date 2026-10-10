@@ -495,3 +495,31 @@ main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
   .rev-tab { padding: 0.6rem; font-size: 0.85rem; }
   .rev-tab-n { font-size: 1.25rem; }
 }
+
+.rev-sources { margin: 1rem 0 0.25rem; }
+.rev-sources-title { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; }
+.rev-sources-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; }
+.rev-src {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rev-src:hover { border-color: var(--primary); }
+.rev-src-n { grid-row: 1 / 3; font-size: 1.35rem; font-weight: 800; color: var(--warn); min-width: 1.4em; text-align: center; }
+.rev-src-label { font-weight: 600; font-size: 0.92rem; }
+.rev-src-sub { color: var(--muted); font-size: 0.78rem; }
+.rev-src.is-zero .rev-src-n { color: var(--good); }
+
+/* Durum renkleri kartın kenarlığına uygulanır; metnin kendisi normal kalır */
+.sent-review.good, .sent-review.mid, .sent-review.bad { color: var(--text); font-weight: 400; }
+a.btn { text-decoration: none; display: inline-block; }

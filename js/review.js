@@ -5,8 +5,9 @@
   var Check = window.YDSTranslateCheck;
   var esc = app.esc;
   var TERM_RE = /\{\{([^|}]+)\|([^|}]+)(?:\|([^}]*))?\}\}/g;
-  var tab = null;          // "sents" | "words" | "questions"
-  var wordFilter = "";     // kaynak filtresi
+  var tab = null;          // "words" | "questions" | "sents"
+  var wordFilter = "";     // kelimelerde kaynak filtresi
+  var qFilter = "";        // sorularda kategori filtresi
   var sentSort = "score";  // "score" | "recent"
   var drill = null;        // { ids, pos, cleared, improved }
 
@@ -29,7 +30,8 @@
   function wrongQuestions() {
     var st = state(), qs = window.YDS_QUESTIONS || [];
     return Object.keys(st.answers).filter(function (k) { return st.answers[k] === false && qs[k]; })
-      .map(function (k) { return { i: +k, q: qs[k] }; });
+      .map(function (k) { return { i: +k, q: qs[k], meta: st.qWrong[k] || { n: 1, t: 0 } }; })
+      .sort(function (a, b) { return b.meta.t - a.meta.t; });
   }
 
   function totalCount() {
@@ -47,7 +49,8 @@
   function render() {
     drill = null;
     var words = app.reviewWords().length, sents = app.weakSentenceCount(), qs = app.wrongQuestionCount();
-    if (!tab) tab = sents ? "sents" : words ? "words" : qs ? "questions" : "sents";
+    if (!tab) tab = words ? "words" : qs ? "questions" : sents ? "sents" : "words";
+    renderSources();
     renderTabs();
 
     if (tab === "sents") renderSents();
@@ -56,11 +59,31 @@
     updateBadge();
   }
 
+  // "Nereden geldi?" özeti: sitedeki her alanın tekrar listesine kaç hata gönderdiği
+  function renderSources() {
+    var words = app.reviewWords();
+    function n(src) { return words.filter(function (w) { return w.src === src; }).length; }
+    var cards = [
+      { label: "Kelime Testi", count: n("test"), sub: "yanlış cevaplanan kelime", go: "words|test" },
+      { label: "Kartlar", count: n("kart"), sub: "\"Bilmiyorum\" denen kelime", go: "words|kart" },
+      { label: "Soru Bankası", count: app.wrongQuestionCount(), sub: "yanlış soru" + (n("soru") ? " · " + n("soru") + " kelime" : ""), go: "questions|" },
+      { label: "Makale Çeviri", count: app.weakSentenceCount() + n("makale") + n("ceviri"),
+        sub: app.weakSentenceCount() + " cümle · " + (n("makale") + n("ceviri")) + " kelime", go: app.weakSentenceCount() ? "sents|" : "words|ceviri" }
+    ];
+    if (n("liste")) cards.push({ label: "Kelime Listesi", count: n("liste"), sub: "öğrenilecek kelime", go: "words|liste" });
+    $("revSources").innerHTML = '<div class="rev-sources-title">Nereden geldi?</div><div class="rev-sources-grid">' +
+      cards.map(function (c) {
+        return '<button class="rev-src' + (c.count ? "" : " is-zero") + '" data-goto="' + c.go + '">' +
+          '<span class="rev-src-n">' + c.count + '</span><span class="rev-src-label">' + c.label + "</span>" +
+          '<span class="rev-src-sub">' + esc(c.sub) + "</span></button>";
+      }).join("") + "</div>";
+  }
+
   function renderTabs() {
     $("revTabs").innerHTML =
-      tabBtn("sents", "Çeviri cümleleri", app.weakSentenceCount()) +
       tabBtn("words", "Kelimeler", app.reviewWords().length) +
-      tabBtn("questions", "Yanlış sorular", app.wrongQuestionCount());
+      tabBtn("questions", "Yanlış sorular", app.wrongQuestionCount()) +
+      tabBtn("sents", "Çeviri cümleleri", app.weakSentenceCount());
   }
 
   function tabBtn(key, label, n) {
@@ -102,8 +125,8 @@
     var all = app.reviewWords();
     if (!all.length) {
       $("revBody").innerHTML = '<div class="empty-box"><p><strong>Tekrar edilecek kelimen yok.</strong></p>' +
-        '<p class="muted">Makalelerde "Öğrenmedim" dediğin, çevirinde karşılığını yazamadığın, kartlarda "Bilmiyorum" dediğin ve kelime testinde yanlış yaptığın kelimeler burada toplanır.</p>' +
-        '<a class="btn btn-primary" href="#articles">Makalelere git</a> <a class="btn" href="#vocab-quiz">Kelime testi çöz</a></div>';
+        '<p class="muted">Kelime testinde yanlış yaptığın, kartlarda "Bilmiyorum" dediğin, Soru Bankası\'ndaki kelime ve bağlaç sorularında kaçırdığın, makalelerde "Öğrenmedim" dediğin ve çevirinde karşılığını yazamadığın kelimeler otomatik olarak burada toplanır.</p>' +
+        '<a class="btn btn-primary" href="#vocab-quiz">Kelime testi çöz</a> <a class="btn" href="#cards">Kartlar</a> <a class="btn" href="#questions">Soru Bankası</a></div>';
       return;
     }
     var counts = {};
@@ -133,21 +156,59 @@
   }
 
   function renderQuestions() {
-    var list = wrongQuestions();
+    var all = wrongQuestions();
     var cats = window.YDS_CATEGORIES || {};
-    if (!list.length) {
+    var L = ["A", "B", "C", "D", "E"];
+    if (!all.length) {
       $("revBody").innerHTML = '<div class="empty-box"><p><strong>Yanlış yaptığın soru yok.</strong></p>' +
-        '<p class="muted">Soru Bankası\'nda yanlış cevapladığın sorular burada listelenir; doğru cevapladığında listeden çıkar.</p>' +
+        '<p class="muted">Soru Bankası\'nda yanlış cevapladığın her soru otomatik olarak buraya eklenir; burada yeniden çözüp doğru cevapladığında listeden çıkar.</p>' +
         '<a class="btn btn-primary" href="#questions">Soru Bankası\'na git</a></div>';
       return;
     }
+    var counts = {};
+    all.forEach(function (x) { counts[x.q.cat] = (counts[x.q.cat] || 0) + 1; });
+    if (qFilter && !counts[qFilter]) qFilter = "";
+    var list = all.filter(function (x) { return !qFilter || x.q.cat === qFilter; });
+
     $("revBody").innerHTML =
-      '<div class="toolbar"><button class="btn btn-primary" data-wrong-q="1">Yanlışları yeniden çöz (' + list.length + ")</button></div>" +
+      '<div class="toolbar"><button class="btn btn-primary" data-q-solve="1">Burada yeniden çöz (' + list.length + ")</button></div>" +
+      '<div class="chips filter-chips">' +
+      '<button class="chip' + (!qFilter ? " active" : "") + '" data-qcat="">Tümü (' + all.length + ")</button>" +
+      Object.keys(counts).map(function (k) {
+        return '<button class="chip' + (qFilter === k ? " active" : "") + '" data-qcat="' + k + '">' +
+          esc(cats[k] || k) + " (" + counts[k] + ")</button>";
+      }).join("") + "</div>" +
       '<div class="rev-list">' + list.map(function (x) {
-        var text = x.q.q.length > 160 ? x.q.q.slice(0, 160) + "…" : x.q.q;
-        return '<div class="rev-item review"><div class="sent-review-head"><span>' + esc(cats[x.q.cat] || x.q.cat) + "</span></div>" +
-          "<p>" + esc(text).replace(/----/g, '<span class="blank">______</span>') + "</p></div>";
+        var q = x.q, m = x.meta;
+        var text = q.q.length > 220 ? q.q.slice(0, 220) + "…" : q.q;
+        return '<div class="rev-item sent-review bad">' +
+          '<div class="sent-review-head"><span>' + esc(cats[q.cat] || q.cat) + "</span>" +
+          (m.n > 1 ? '<span class="tag tag-lvl3">' + m.n + " kez yanlış</span>" : "") + "</div>" +
+          '<p>' + esc(text).replace(/----/g, '<span class="blank">______</span>') + "</p>" +
+          (m.c !== undefined && q.o[m.c] !== undefined
+            ? '<p class="small"><span class="bad">Senin cevabın: ' + L[m.c] + ") " + esc(q.o[m.c]) + "</span></p>" : "") +
+          '<details class="drill-hints"><summary>Doğru cevap ve açıklama</summary>' +
+          '<p><span class="ok">' + L[q.a] + ") " + esc(q.o[q.a]) + "</span></p><p>" + esc(q.x) + "</p></details></div>";
       }).join("") + "</div>";
+  }
+
+  function solveQuestions() {
+    var list = wrongQuestions().filter(function (x) { return !qFilter || x.q.cat === qFilter; });
+    var cats = window.YDS_CATEGORIES || {};
+    var items = shuffle(list).map(function (x) {
+      var q = x.q;
+      return {
+        label: cats[q.cat],
+        passage: q.passage,
+        prompt: q.q,
+        options: q.o,
+        answer: q.a,
+        explain: q.x,
+        onAnswer: function (ok, chosen) { app.recordAnswer(x.i, ok, chosen); renderTabs(); renderSources(); updateBadge(); }
+      };
+    });
+    $("revBody").innerHTML = '<p class="muted small">Doğru cevapladığın sorular tekrar listenden çıkar, yanlışlar kalır.</p><div id="revQuiz"></div>';
+    app.runQuiz($("revQuiz"), items, { onFinish: updateBadge, onRestart: render });
   }
 
   // ---------- Cümle tekrar çalışması ----------
@@ -269,7 +330,7 @@
         options: choices.map(function (c) { return c.m; }),
         answer: choices.indexOf(w),
         explain: w.w + ": " + w.m + " — " + w.e,
-        onAnswer: function (ok) { app.setKnown(w, ok, w.src); }
+        onAnswer: function (ok) { app.setKnown(w, ok, w.src); renderTabs(); renderSources(); updateBadge(); }
       };
     });
     $("revBody").innerHTML = '<p class="muted small">Doğru bildiğin kelimeler tekrar listenden çıkar, yanlışlar listede kalır.</p><div id="revQuiz"></div>';
@@ -294,6 +355,17 @@
     if (b) { tab = b.getAttribute("data-tab"); render(); }
   });
 
+  $("revSources").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-goto]");
+    if (!b) return;
+    var parts = b.getAttribute("data-goto").split("|");
+    tab = parts[0];
+    if (tab === "words") wordFilter = parts[1];
+    if (tab === "questions") qFilter = parts[1];
+    render();
+    $("revTabs").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   $("revBody").addEventListener("click", function (e) {
     var t = e.target.closest("button, a");
     if (!t) return;
@@ -313,11 +385,8 @@
       render();
     } else if (t.hasAttribute("data-cards")) $("cardSet").value = "review";
     else if (t.hasAttribute("data-word-quiz")) startWordQuiz();
-    else if (t.hasAttribute("data-wrong-q")) {
-      $("qCat").value = "__wrong";
-      location.hash = "#questions";
-      setTimeout(function () { $("qStart").click(); }, 0);
-    }
+    else if (t.hasAttribute("data-qcat")) { qFilter = t.getAttribute("data-qcat"); renderQuestions(); }
+    else if (t.hasAttribute("data-q-solve")) solveQuestions();
   });
 
   $("revBody").addEventListener("change", function (e) {
