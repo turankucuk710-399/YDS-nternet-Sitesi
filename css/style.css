@@ -566,3 +566,6 @@ a.btn { text-decoration: none; display: inline-block; }
 code { font-family: ui-monospace, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
 .blank-num { white-space: nowrap; color: var(--blank); font-weight: 700; }
 .blank-num.is-current { background: var(--sent-bg); border-radius: 4px; padding: 0 3px; }
+
+.tag-lvl4 { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+.add-panel textarea { width: 100%; }

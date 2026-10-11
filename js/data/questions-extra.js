@@ -854,3 +854,60 @@ window.YDS_QUESTIONS.push.apply(window.YDS_QUESTIONS, [
     "x": "Paragraf İpek Yolu'nun ticari ve kültürel rolünü anlatıyor; ipeğin nasıl üretildiği (III) akışı bozuyor."
   }
 ]);
+
+// Paragraf Tamamlama (YDS 72–75 türü) — özgün sorular
+Object.assign(window.YDS_CATEGORIES, { eksikCumle: "Paragraf Tamamlama" });
+window.YDS_QUESTIONS.push.apply(window.YDS_QUESTIONS, [
+  {
+    "cat": "eksikCumle",
+    "q": "Honeybees communicate the location of food through a series of movements known as the 'waggle dance'. A bee returning to the hive moves in a figure-of-eight pattern, and the angle of its run indicates the direction of the food relative to the sun. ---- In this way, other bees can fly directly to a flower patch several kilometres away without searching for it themselves.",
+    "o": [
+      "However, bees are unable to see the colour red.",
+      "Unlike bees, many wasps live alone and do not form colonies.",
+      "Some farmers rent beehives to pollinate their fruit trees.",
+      "Honey has been used as a natural medicine since ancient times.",
+      "Meanwhile, the duration of the dance tells the other bees how far away the food is."
+    ],
+    "a": 4,
+    "x": "Boşluktan önce dansın yönü, sonra da diğer arıların doğrudan çiçeklere uçabildiği anlatılıyor. Eksik bilgi mesafedir: dansın süresi uzaklığı gösterir."
+  },
+  {
+    "cat": "eksikCumle",
+    "q": "For most of history, people slept in two separate periods each night. They went to bed shortly after dark, woke up around midnight for an hour or two, and then slept again until morning. ---- Historians believe that the spread of artificial lighting in the 19th century gradually made this pattern disappear, as people began to stay up later and sleep in a single block.",
+    "o": [
+      "During this waking period, they would pray, read, talk to neighbours or simply lie quietly in bed.",
+      "Some animals, such as dolphins, sleep with only half of their brain at a time.",
+      "Night shifts are known to increase the risk of certain illnesses.",
+      "Modern doctors recommend that adults sleep for seven to nine hours.",
+      "Electric light bulbs were first sold commercially in the 1880s."
+    ],
+    "a": 0,
+    "x": "Paragraf iki parçalı uykuyu anlatıyor; boşluk, gece yarısındaki uyanıklık süresinde ne yapıldığını açıklayan cümleyle tamamlanır. Sonraki cümle bu alışkanlığın neden kaybolduğunu anlatır."
+  },
+  {
+    "cat": "eksikCumle",
+    "q": "Many cities are replacing traditional streetlights with LED lamps because they use far less electricity. ---- Bright white LEDs emit large amounts of blue light, which can confuse migrating birds and disrupt the sleep of people living nearby. As a result, some cities now choose warmer-coloured LEDs that are less harmful but still save energy.",
+    "o": [
+      "In other words, cities spend a lot of money on lighting.",
+      "For example, the first streetlights used gas instead of electricity.",
+      "However, this change has an unexpected downside.",
+      "Similarly, solar panels are becoming more efficient every year.",
+      "Therefore, LED lamps are cheaper to produce than ever before."
+    ],
+    "a": 2,
+    "x": "Boşluktan önce LED'in faydası, sonra zararları anlatılıyor. Bu yön değişimini \"However\" ile başlayan cümle sağlar."
+  },
+  {
+    "cat": "eksikCumle",
+    "q": "The Great Barrier Reef is the largest living structure on Earth and can even be seen from space. It is made up of nearly 3,000 individual reefs and supports thousands of species of fish, molluscs and corals. ---- Rising sea temperatures have caused several mass bleaching events since 1998, and scientists warn that the reef could lose most of its corals within decades if global warming continues.",
+    "o": [
+      "The reef was declared a World Heritage Site in 1981.",
+      "Australia also has some of the world's most venomous snakes.",
+      "Yet this remarkable ecosystem is now under serious threat.",
+      "Corals are actually animals, not plants as many people believe.",
+      "Tourists can visit the reef by boat from several coastal towns."
+    ],
+    "a": 2,
+    "x": "Paragraf resifin büyüklüğünden sonra karşılaştığı tehditlere geçiyor; geçişi \"Yet … under serious threat\" cümlesi kurar."
+  }
+]);

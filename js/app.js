@@ -7,7 +7,7 @@
   var LETTERS = ["A", "B", "C", "D", "E"];
   var TYPE_LABELS = { v: "fiil", n: "isim", adj: "sıfat", adv: "zarf", phr: "öbek fiil", conj: "bağlaç", art: "makale kelimesi", x: "kelime" };
   var BUILTIN_Q = QUESTIONS.length; // sitenin kendi soruları; kullanıcı soruları bunların arkasına eklenir
-  var LEVEL_LABELS = { 1: "Temel", 2: "Orta", 3: "İleri" };
+  var LEVEL_LABELS = { 1: "Temel", 2: "Orta", 3: "İleri", 4: "C2" };
 
   // ---------- Yardımcılar ----------
   function $(id) { return document.getElementById(id); }
@@ -90,9 +90,14 @@
     var parts = String(word).trim().toLowerCase().split(/\s+/).map(function (p) {
       return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     });
-    var first = parts[0].replace(/e$/, "");
-    parts[0] = first + "(?:e|es|s|ed|d|ing|ies|ied)?";
-    if (parts.length > 1) parts[0] = "(?:" + parts[0] + "|" + first + "e?)";
+    var w0 = parts[0];
+    if (/[^aeiou]y$/.test(w0)) {
+      // embody → embodies, embodied, embodying
+      parts[0] = w0.slice(0, -1) + "(?:y|ies|ied|ying)";
+    } else {
+      var first = w0.replace(/e$/, "");
+      parts[0] = first + "(?:e|es|s|ed|d|ing|ies|ied)?";
+    }
     return new RegExp("\\b" + parts.join("\\s+") + "\\b", "i");
   }
 
@@ -319,6 +324,7 @@
     if (set === "review") { deck = shuffle(reviewWords()); deckPos = 0; showCard(); return; }
     var pool = WORDS.filter(function (w) {
       if (set === "all") return true;
+      if (set === "c2") return w.lvl === 4;
       if (set === "unknown") return !isKnown(w);
       return w.t === set;
     });
