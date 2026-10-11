@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
   <header class="topbar">
@@ -73,6 +73,7 @@
           <option value="1">Temel</option>
           <option value="2">Orta</option>
           <option value="3">İleri</option>
+          <option value="4">C2 (çok ileri)</option>
         </select>
         <select id="wordStatus">
           <option value="">Hepsi</option>
@@ -126,6 +127,7 @@
         <select id="cardSet">
           <option value="unknown">Henüz bilmediklerim</option>
           <option value="all">Tüm kelimeler</option>
+          <option value="c2">C2 kelimeler</option>
           <option value="v">Fiiller</option>
           <option value="n">İsimler</option>
           <option value="adj">Sıfatlar</option>
@@ -192,6 +194,19 @@
         <label class="block">Açıklama (isteğe bağlı)<textarea id="cqExplain" rows="2"></textarea></label>
         <div class="toolbar"><button class="btn btn-primary" id="cqSave">Soruyu kaydet</button></div>
         <div id="cqMsg"></div>
+        <details class="bulk" id="cqBulkBox">
+          <summary>Toplu içe aktar (metin yapıştır)</summary>
+          <p class="muted small">Elinde metin olarak bulunan soruları (ör. ÖSYM'nin yayımladığı çıkmış soru kitapçıklarından kopyaladığın metni) buraya yapıştır. Numaralı sorular, <code>A) … E)</code> seçenekleri ve okuma parçaları otomatik ayrılır. Cevapları her sorunun altına <code>Cevap: B</code> diye ya da sona <code>1-B 2-C 3-A …</code> biçiminde bir cevap anahtarı olarak ekle. Her seferinde tek bir sınav yapıştır.</p>
+          <label class="block">Kategori
+            <select id="cqBulkCat"><option value="auto">YDS soru numarasına göre otomatik (1–80)</option></select>
+          </label>
+          <textarea id="cqBulk" rows="8" placeholder="1. The museum decided to ---- its opening hours.&#10;A) extend B) diminish C) conceal D) deprive E) undermine&#10;...&#10;CEVAP ANAHTARI&#10;1-A 2-C 3-B ..."></textarea>
+          <div class="toolbar">
+            <button class="btn btn-primary" id="cqBulkSave">İçe aktar</button>
+            <button class="btn" id="cqBulkUndo" hidden>Son içe aktarmayı geri al</button>
+          </div>
+          <div id="cqBulkMsg"></div>
+        </details>
         <details class="bulk">
           <summary>Eklediğim sorular (<span id="cqMineCount">0</span>)</summary>
           <ul class="review-list" id="cqMine"></ul>
@@ -246,14 +261,16 @@
     <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=6"></script>
-  <script src="js/data/questions.js?v=6"></script>
-  <script src="js/data/questions-extra.js?v=6"></script>
-  <script src="js/data/articles.js?v=6"></script>
-  <script src="js/translate-check.js?v=6"></script>
-  <script src="js/articles.js?v=6"></script>
-  <script src="js/review.js?v=6"></script>
-  <script src="js/custom.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/data/words.js?v=7"></script>
+  <script src="js/data/words-c2.js?v=7"></script>
+  <script src="js/data/questions.js?v=7"></script>
+  <script src="js/data/questions-extra.js?v=7"></script>
+  <script src="js/data/articles.js?v=7"></script>
+  <script src="js/translate-check.js?v=7"></script>
+  <script src="js/articles.js?v=7"></script>
+  <script src="js/review.js?v=7"></script>
+  <script src="js/import.js?v=7"></script>
+  <script src="js/custom.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

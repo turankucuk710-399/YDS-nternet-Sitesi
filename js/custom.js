@@ -194,6 +194,9 @@
     $("cqCat").innerHTML = Object.keys(cats).map(function (k) {
       return '<option value="' + k + '">' + esc(cats[k]) + "</option>";
     }).join("");
+    $("cqBulkCat").innerHTML += Object.keys(cats).map(function (k) {
+      return '<option value="' + k + '">Hepsi: ' + esc(cats[k]) + "</option>";
+    }).join("");
     $("cqOptions").innerHTML = L.map(function (letter, i) {
       return '<label class="cq-opt"><input type="radio" name="cqCorrect" value="' + i + '"' + (i === 0 ? " checked" : "") + ">" +
         "<span>" + letter + ')</span><input type="text" id="cqO' + i + '" placeholder="' + letter + ' seçeneği"></label>';
@@ -241,6 +244,66 @@
     renderMyQuestions();
   }
 
+  // ---------- Toplu soru içe aktarma ----------
+  var lastBatch = null;
+
+  function bulkImport() {
+    var cats = window.YDS_CATEGORIES || {};
+    var res = window.YDSImport.parse($("cqBulk").value, { category: $("cqBulkCat").value });
+    var msg = $("cqBulkMsg");
+    if (!res.questions.length) {
+      msg.innerHTML = '<p class="bad">Hiç soru alınamadı.' +
+        (res.skipped.length ? " " + res.skipped.length + " soru bulundu ama eksikti: " + skippedText(res.skipped) : " Biçimi kontrol et.") + "</p>";
+      return;
+    }
+    var batch = newId();
+    var existing = {};
+    state().userQs.forEach(function (q) { existing[q.cat + "|" + q.q] = true; });
+    var added = 0, dup = 0, counts = {};
+    res.questions.forEach(function (q) {
+      if (existing[q.cat + "|" + q.q]) { dup++; return; }
+      q.uid = newId();
+      q.b = batch;
+      state().userQs.push(q);
+      counts[q.cat] = (counts[q.cat] || 0) + 1;
+      added++;
+    });
+    app.mergeUserContent();
+    app.save();
+    app.refreshQuestionCats();
+    renderMyQuestions();
+    lastBatch = added ? batch : null;
+    $("cqBulkUndo").hidden = !lastBatch;
+    msg.innerHTML =
+      '<div class="tracked good"><strong>' + added + " soru</strong> eklendi" +
+      (added ? ": " + Object.keys(counts).map(function (k) { return esc(cats[k] || k) + " " + counts[k]; }).join(", ") : "") + "." +
+      (dup ? " " + dup + " soru zaten ekli olduğu için atlandı." : "") +
+      " Soru Bankası'nda \"Eklediğim sorular\" ya da kendi kategorilerinde çıkacak.</div>" +
+      (res.skipped.length ? '<p class="small bad">Alınamayan sorular: ' + skippedText(res.skipped) + "</p>" : "");
+    if (added) $("cqBulk").value = "";
+  }
+
+  function skippedText(list) {
+    return list.map(function (s) { return s.n + " (" + esc(s.why) + ")"; }).join(", ");
+  }
+
+  function undoBatch() {
+    if (!lastBatch) return;
+    var st = state();
+    st.userQs.filter(function (q) { return q.b === lastBatch; }).forEach(function (q) {
+      delete st.answers["u" + q.uid];
+      delete st.qWrong["u" + q.uid];
+    });
+    st.userQs = st.userQs.filter(function (q) { return q.b !== lastBatch; });
+    lastBatch = null;
+    app.mergeUserContent();
+    app.save();
+    app.refreshQuestionCats();
+    renderMyQuestions();
+    $("cqBulkUndo").hidden = true;
+    $("cqBulkMsg").innerHTML = '<p class="muted">Son içe aktarma geri alındı.</p>';
+  }
+
   function deleteQuestion(uid) {
     var st = state();
     if (!confirm("Bu soru silinsin mi?")) return;
@@ -286,6 +349,8 @@
     this.setAttribute("aria-expanded", String(!p.hidden));
   });
   $("cqSave").addEventListener("click", saveQuestion);
+  $("cqBulkSave").addEventListener("click", bulkImport);
+  $("cqBulkUndo").addEventListener("click", undoBatch);
   $("cqMine").addEventListener("click", function (e) {
     var b = e.target.closest("[data-del-q]");
     if (b) deleteQuestion(b.getAttribute("data-del-q"));
