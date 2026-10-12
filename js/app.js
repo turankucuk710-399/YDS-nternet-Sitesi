@@ -344,6 +344,7 @@
       if (lvl && String(w.lvl) !== lvl) return false;
       if (status === "known" && !isKnown(w)) return false;
       if (status === "mine" && !w.u) return false;
+      if (status === "sik" && !w.sik) return false;
       if (status === "unknown" && isKnown(w)) return false;
       if (q && trLower(w.w).indexOf(q) === -1 && trLower(w.m).indexOf(q) === -1) return false;
       return true;
@@ -356,6 +357,7 @@
         '<div class="word-head"><h3>' + esc(w.w) + '</h3>' +
         '<span class="tag">' + (TYPE_LABELS[w.t] || "kelime") + '</span>' +
         (w.u ? '<span class="tag tag-mine">Eklediğim</span>' : '<span class="tag tag-lvl' + w.lvl + '">' + LEVEL_LABELS[w.lvl] + "</span>") +
+        (w.sik ? '<span class="tag tag-sik">Sınav şıkkı</span>' : "") +
         '<button class="mark" data-word="' + esc(w.w) + '" aria-pressed="' + known + '" title="Bildiklerime ekle/çıkar">' +
         (known ? "✓ Biliyorum" : "+ Biliyorum") + "</button></div>" +
         '<p class="meaning">' + esc(w.m) + "</p>" +
@@ -523,6 +525,7 @@
       pool = shuffle(WORDS.filter(function (w) {
         if (set === "all") return true;
         if (set === "c2") return w.lvl === 4;
+        if (set === "sik") return !!w.sik;
         if (set === "unknown") return !isKnown(w);
         return w.t === set;
       }));

@@ -4,7 +4,7 @@ YDS (Yabancı Dil Sınavı) için hazırlanmış, kurulum gerektirmeyen statik b
 
 ## Özellikler
 
-- **Kelime Listesi** — YDS'de sık çıkan 168 temel kelime ve 2021–2022 YDS sorularında geçen 207 ileri düzey (C1–C2) kelime; Türkçe anlam ve özgün örnek cümleyle. Seviye filtresinde "C2", kartlarda "C2 kelimeler" destesi. Arama, tür/seviye filtresi ve "biliyorum" işaretleme.
+- **Kelime Listesi** — YDS'de sık çıkan temel kelimeler ve 2021–2022 YDS sorularında geçen ileri düzey (C1–C2) kelimeler (toplam 458); Türkçe anlam ve özgün örnek cümleyle. Seviye filtresinde "C2", kartlarda "C2 kelimeler" destesi. Ayrıca 2021–2022 YDS kelime sorularının şıklarındaki 119 kelimenin tamamı listede; "Sınav şıklarındaki kelimeler" filtresi ve kart destesiyle çalışılabilir. Arama, tür/seviye filtresi ve "biliyorum" işaretleme.
 - **Kelime Kartları** — Çevrilebilir kartlar ve aralıklı tekrar: **Bilmiyorum** ve **Tekrara ihtiyacım var** denen kelimeler siteye her yeni girişte (ve oturum içinde birkaç kart sonra) yeniden sorulur; zor listesinden çıkmaları için farklı bir girişte de bilinmeleri gerekir. **Biliyorum** ile aralık 1 → 3 → 7 → 16 → 35 gün uzar, kelime hafızadan silinmez. **Akıllı tekrar** destesi, ana sayfa hatırlatması ve menü rozeti. Klavye: `Boşluk` çevir, `←` bilmiyorum, `↓` tekrar, `→` biliyorum.
 - **Yedekleme** — Sayfa altındaki "Yedeği indir / Yedeği yükle" ile tüm ilerleme bir dosyaya alınıp başka tarayıcıya taşınabilir; tarayıcı kayıt tutamıyorsa (gizli sekme, uygulama içi tarayıcı) uyarı gösterilir.
 - **Kelime Testi** — Kelime listesinden otomatik oluşturulan çoktan seçmeli test (İng→Tr, Tr→İng veya karışık).

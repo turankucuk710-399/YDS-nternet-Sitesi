@@ -597,3 +597,4 @@ code { font-family: ui-monospace, monospace; background: var(--surface-2); paddi
 .storage-warning { background: var(--bad-bg); color: var(--text); border-bottom: 1px solid var(--bad); padding: 0.7rem 1rem; text-align: center; font-size: 0.93rem; }
 .storage-warning[hidden] { display: none; }
 label.linkish { cursor: pointer; }
+.tag-sik { background: var(--sent-bg); color: var(--text); }
