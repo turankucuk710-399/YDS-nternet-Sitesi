@@ -25,7 +25,11 @@
   CONNECTORS.concat(PREPS).forEach(function (w) { WORDSET[w] = true; });
 
   var KEY_PAIR = /(\d{1,2})\s*[-.):]?\s*([A-E])\b/g;
-  var Q_START = /^\s*(\d{1,2})\s*[.)]\s*(.*)$/;
+  var Q_START = /^\s*(\d{1,2})\s*[.),]\s*(.*)$/;
+  // OCR'da seçenek harfi bozulabilir ("©)", "£)", "0)", "1b)"); sıradaki seçenek olarak kabul edilir
+  var LOOSE_OPT = /^\s*[(\[{]?\s*(\S{1,2}?)\s*[)\]}]\s*(.*)$/;
+  var STRICT_OPT = /^\s*[(\[]?\s*([A-E])\s*[).\]]\s+(.*)$/;
+  var JUNK = /\b(english|yay[ıi]nlar[ıi]|informal|www\.|\.com)\b/i;
   var OPT_SPLIT = /(?:^|\s)([A-E])\s*\)\s*/g;
   var INSTRUCTION = /^\s*\d{1,2}\s*[-–]\s*\d{1,2}\s*[:.]|for these questions|answer these questions|choose the (best|most|irrelevant)|this test consists/i;
   var TURKISH = /[çğıöşüÇĞİÖŞÜ]/;
@@ -37,11 +41,13 @@
   }
 
   // "A) x  B) y" → [["A","x"],["B","y"]]; satırda seçenek yoksa null
-  function splitOptions(line) {
+  // loose: satır başındaki en fazla 3 karakterlik OCR artığını yok say ("re A) …")
+  function splitOptions(line, loose) {
     var parts = [], m, idx = [];
     OPT_SPLIT.lastIndex = 0;
     while ((m = OPT_SPLIT.exec(line))) idx.push({ letter: m[1], start: m.index, after: OPT_SPLIT.lastIndex });
-    if (!idx.length || line.slice(0, idx[0].start).trim()) return null;
+    var prefix = idx.length ? line.slice(0, idx[0].start).trim() : "";
+    if (!idx.length || prefix && !(loose && prefix.length <= 3 && !/\s/.test(prefix))) return null;
     idx.forEach(function (p, i) {
       parts.push([p.letter, line.slice(p.after, i + 1 < idx.length ? idx[i + 1].start : line.length).trim()]);
     });
@@ -71,11 +77,28 @@
     return hits >= 3;
   }
 
+  // Kâğıt kenarı, sayfa numarası gibi OCR artıkları
+  function isJunk(line) {
+    var letters = (line.match(/[A-Za-zÇĞİÖŞÜçğıöşü]/g) || []).length;
+    if (letters < 4) return true;
+    if (letters / line.length < 0.5) return true;
+    return JUNK.test(line) && line.length < 40;
+  }
+
+  // Numarası bilinmeyen soru için kaba tahmin (önizlemede değiştirilebilir)
+  function guessCategory(q) {
+    var avg = q.o.join(" ").length / 5;
+    if (avg < 16) return isConnectorQuestion(q) ? "baglac" : "kelime";
+    if (/----/.test(q.q)) return q.q.length > 220 ? "eksikCumle" : "tamamlama";
+    return "okuma";
+  }
+
   function parse(text, opts) {
     opts = opts || {};
     var lines = String(text).replace(/\r/g, "").split("\n");
     var questions = [], key = {}, passage = "", passageOpen = false, cur = null, last = null;
     var skipped = [];
+    var afterPage = false; // sayfa ayracından sonra numaralı yeni soru beklenir
 
     function finish() {
       if (cur) questions.push(cur);
@@ -86,6 +109,14 @@
     lines.forEach(function (raw) {
       var line = raw.replace(/\s+/g, " ").trim();
       if (!line) return;
+
+      // Sayfa ayracı ("=== Sayfa 3 ==="): tamamlanmış soru burada biter, yarım kalan sonraki sayfada sürer
+      if (/^=+\s*sayfa\b.*=+$/i.test(line)) {
+        if (cur && cur.o.length === 5) finish();
+        if (!cur) { passage = ""; passageOpen = false; }
+        afterPage = true;
+        return;
+      }
 
       // Cevap anahtarı satırı
       if (isKeyLine(line)) {
@@ -100,8 +131,23 @@
 
       if (INSTRUCTION.test(line)) { finish(); passage = ""; passageOpen = true; return; }
 
+      // Seçenekleri yarım kalmış soruda bozuk harfli seçenek satırı
+      if (cur && (cur.o.length || cur.q) && cur.o.length < 5 && !splitOptions(line)) {
+        var so = STRICT_OPT.exec(line);
+        var lo = !so && cur.o.length ? LOOSE_OPT.exec(line) : null;
+        if (so && "ABCDE".indexOf(so[1]) === cur.o.length && so[2]) { cur.o.push(so[2]); last = "o"; return; }
+        if (lo && lo[2] && (!/^\d+$/.test(lo[1]) || lo[1] === "0")) { cur.o.push(lo[2]); last = "o"; return; }
+      }
+
       var qs = Q_START.exec(line);
+      if (qs && (+qs[1] === 0 || opts.ocr && /^\s*\d+\s*\)/.test(line))) qs = null;
+      // OCR noktayı kaçırabilir: "72 Many ancient …" (yalnızca önceki soru tamamsa)
+      if (!qs && opts.ocr && (!cur || cur.o.length === 5 || afterPage)) {
+        var bare = /^\s*(\d{1,2})\s+([A-Z][a-z].*)$/.exec(line);
+        if (bare && +bare[1] > 0 && +bare[1] <= 80) qs = bare;
+      }
       // Aynı satırda okuma parçası gibi uzun metinler numarayla başlamaz; "1. ..." yeni soru
+      if (qs) afterPage = false;
       if (qs && (!cur || cur.o.length || +qs[1] !== cur.n)) {
         var rest = qs[2];
         finish();
@@ -118,7 +164,15 @@
         return;
       }
 
-      var op = splitOptions(line);
+      var op = splitOptions(line, opts.ocr);
+      // Numarası okunamamış soru: "A)" ile başlayan seçenekler, önceki metin soru kökü olur
+      if (op && op[0][0] === "A" && (!cur || cur.o.length === 5) && passage) {
+        finish();
+        var prevN = questions.length ? questions[questions.length - 1].n : 0;
+        cur = { n: prevN ? prevN + 1 : 0, guessed: true, q: passage, o: [], passage: "" };
+        passage = "";
+        passageOpen = false;
+      }
       if (op && cur) {
         op.forEach(function (p) {
           var i = "ABCDE".indexOf(p[0]);
@@ -129,7 +183,11 @@
         return;
       }
 
+      if (opts.ocr && isJunk(line)) return;
+
       // Devam satırı ya da yeni okuma parçası
+      // Küçük harfle başlayan satır son seçeneğin devamıdır
+      if (cur && cur.o.length === 5 && last === "o" && /^[a-zçğıöşü0-9,;:)]/.test(line)) { cur.o[4] += " " + line; return; }
       if (cur && cur.o.length === 5) {
         // Seçenekleri tamamlanmış sorudan sonra gelen metin: yeni parça
         finish();
@@ -152,12 +210,15 @@
       q.o = q.o.map(function (o) { return o.trim(); });
       var a = q.ans !== undefined ? q.ans : key[q.n];
       if (q.o.length !== 5 || q.o.some(function (o) { return !o; })) { skipped.push({ n: q.n, why: "5 seçenek bulunamadı" }); return; }
-      if (a === undefined || a < 0) { skipped.push({ n: q.n, why: "cevap yok" }); return; }
-      var cat = opts.category && opts.category !== "auto" ? opts.category : categorize(q.n, q);
+      if (a === undefined || a < 0) {
+        if (!opts.keepUnanswered) { skipped.push({ n: q.n, why: "cevap yok" }); return; }
+        a = -1;
+      }
+      var cat = opts.category && opts.category !== "auto" ? opts.category : q.guessed ? guessCategory(q) : categorize(q.n, q);
       if (!cat) { skipped.push({ n: q.n, why: "kategori belirlenemedi (1–80 dışında)" }); return; }
       if (!q.q && cat === "cloze") q.q = "(" + q.n + ") numaralı boşluğa hangisi gelmelidir?";
       if (!q.q) { skipped.push({ n: q.n, why: "soru metni yok" }); return; }
-      var item = { cat: cat, q: q.q, o: q.o, a: a, x: "Toplu içe aktarıldı (soru " + q.n + ")." };
+      var item = { n: q.n, cat: cat, q: q.q, o: q.o, a: a, x: "Toplu içe aktarıldı" + (q.n ? " (soru " + q.n + ")" : "") + "." };
       if (q.passage && (cat === "cloze" || cat === "okuma")) item.passage = q.passage;
       out.push(item);
     });

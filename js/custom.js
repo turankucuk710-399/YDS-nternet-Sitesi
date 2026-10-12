@@ -247,23 +247,86 @@
   // ---------- Toplu soru içe aktarma ----------
   var lastBatch = null;
 
+  // 2. adım: metni ayır ve önizle
+  var pending = [];
+
+  function parsePreview() {
+    var res = window.YDSImport.parse($("cqBulk").value, { category: $("cqBulkCat").value, keepUnanswered: true, ocr: true });
+    var msg = $("cqBulkMsg");
+    msg.innerHTML = "";
+    pending = res.questions.map(function (q) { q.on = q.a >= 0; return q; });
+    if (!pending.length) {
+      $("cqPreviewBox").hidden = true;
+      msg.innerHTML = '<p class="bad">Hiç soru ayrılamadı.' +
+        (res.skipped.length ? " " + res.skipped.length + " soru bulundu ama eksikti: " + skippedText(res.skipped) : " Soru numaralarının ve A) … E) seçeneklerinin satır başında olduğunu kontrol et.") + "</p>";
+      return;
+    }
+    renderPreview(res.skipped);
+    $("cqPreviewBox").hidden = false;
+    $("cqPreviewBox").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderPreview(skipped) {
+    var cats = window.YDS_CATEGORIES || {};
+    var noAns = pending.filter(function (q) { return q.a < 0; }).length;
+    var head = '<p class="small">' + pending.length + " soru ayrıldı." +
+      (noAns ? " <strong>" + noAns + " sorunun cevabı yok</strong>: doğru şıkkı işaretle; işaretlemediklerin kaydedilmez." : " Cevapların hepsi anahtardan alındı; kontrol edip kaydedebilirsin.") + "</p>" +
+      (skipped && skipped.length ? '<p class="small bad">Ayrılamayanlar: ' + skippedText(skipped) + " — metinde düzeltip yeniden ayırabilirsin.</p>" : "");
+    $("cqPreview").innerHTML = head + '<ol class="imp-list">' + pending.map(function (q, i) {
+      return '<li class="imp-item' + (q.a < 0 ? " no-ans" : "") + (q.on ? "" : " off") + '" data-imp="' + i + '">' +
+        '<div class="imp-head"><label><input type="checkbox" data-imp-on' + (q.on ? " checked" : "") + "> Ekle</label>" +
+        '<span class="imp-num">' + (q.n ? q.n + "." : "Numarasız") + "</span>" +
+        '<select data-imp-cat aria-label="Kategori">' + Object.keys(cats).map(function (k) {
+          return '<option value="' + k + '"' + (k === q.cat ? " selected" : "") + ">" + esc(cats[k]) + "</option>";
+        }).join("") + "</select></div>" +
+        (q.passage ? '<p class="imp-passage">Parça: ' + esc(q.passage.length > 160 ? q.passage.slice(0, 160) + "…" : q.passage) + "</p>" : "") +
+        '<p class="imp-q">' + esc(q.q) + "</p>" +
+        q.o.map(function (o, k) {
+          return '<label class="imp-opt' + (q.a === k ? " is-ans" : "") + '"><input type="radio" name="imp-a-' + i + '" value="' + k + '"' + (q.a === k ? " checked" : "") + ">" +
+            "<b>" + L[k] + ")</b><span>" + esc(o) + "</span></label>";
+        }).join("") + "</li>";
+    }).join("") + "</ol>";
+  }
+
+  function previewChange(e) {
+    var li = e.target.closest("[data-imp]");
+    if (!li) return;
+    var q = pending[parseInt(li.getAttribute("data-imp"), 10)];
+    if (e.target.matches("[data-imp-on]")) q.on = e.target.checked;
+    else if (e.target.matches("[data-imp-cat]")) q.cat = e.target.value;
+    else if (e.target.type === "radio") {
+      q.a = parseInt(e.target.value, 10);
+      q.on = true;
+      li.querySelector("[data-imp-on]").checked = true;
+      li.classList.remove("no-ans");
+      li.querySelectorAll(".imp-opt").forEach(function (el, k) { el.classList.toggle("is-ans", k === q.a); });
+    }
+    li.classList.toggle("off", !q.on);
+  }
+
+  // 3. adım: işaretlenenleri kaydet
   function bulkImport() {
     var cats = window.YDS_CATEGORIES || {};
-    var res = window.YDSImport.parse($("cqBulk").value, { category: $("cqBulkCat").value });
     var msg = $("cqBulkMsg");
-    if (!res.questions.length) {
-      msg.innerHTML = '<p class="bad">Hiç soru alınamadı.' +
-        (res.skipped.length ? " " + res.skipped.length + " soru bulundu ama eksikti: " + skippedText(res.skipped) : " Biçimi kontrol et.") + "</p>";
+    var chosen = pending.filter(function (q) { return q.on; });
+    var missing = chosen.filter(function (q) { return q.a < 0; });
+    if (missing.length) {
+      msg.innerHTML = '<p class="bad">Şu soruların doğru şıkkını işaretle ya da "Ekle" işaretini kaldır: ' + missing.map(function (q) { return q.n || "numarasız"; }).join(", ") + ".</p>";
+      return;
+    }
+    if (!chosen.length) {
+      msg.innerHTML = '<p class="bad">Kaydedilecek soru seçilmedi.</p>';
       return;
     }
     var batch = newId();
     var existing = {};
     state().userQs.forEach(function (q) { existing[q.cat + "|" + q.q] = true; });
     var added = 0, dup = 0, counts = {};
-    res.questions.forEach(function (q) {
-      if (existing[q.cat + "|" + q.q]) { dup++; return; }
-      q.uid = newId();
-      q.b = batch;
+    chosen.forEach(function (p) {
+      if (existing[p.cat + "|" + p.q]) { dup++; return; }
+      var q = { uid: newId(), b: batch, cat: p.cat, q: p.q, o: p.o, a: p.a, x: p.x };
+      if (p.passage && (p.cat === "cloze" || p.cat === "okuma")) q.passage = p.passage;
+      existing[q.cat + "|" + q.q] = true;
       state().userQs.push(q);
       counts[q.cat] = (counts[q.cat] || 0) + 1;
       added++;
@@ -278,13 +341,120 @@
       '<div class="tracked good"><strong>' + added + " soru</strong> eklendi" +
       (added ? ": " + Object.keys(counts).map(function (k) { return esc(cats[k] || k) + " " + counts[k]; }).join(", ") : "") + "." +
       (dup ? " " + dup + " soru zaten ekli olduğu için atlandı." : "") +
-      " Soru Bankası'nda \"Eklediğim sorular\" ya da kendi kategorilerinde çıkacak.</div>" +
-      (res.skipped.length ? '<p class="small bad">Alınamayan sorular: ' + skippedText(res.skipped) + "</p>" : "");
-    if (added) $("cqBulk").value = "";
+      " Soru Bankası'nda \"Eklediğim sorular\" ya da kendi kategorilerinde çıkacak.</div>";
+    if (added) {
+      $("cqBulk").value = "";
+      pending = [];
+      $("cqPreviewBox").hidden = true;
+    }
+  }
+
+  // 1. adım: fotoğraf / PDF'ten metin okuma
+  var ocrPages = [], ocrBusy = false;
+
+  function thumb(page) {
+    var c = window.YDSOcr.scaled(window.YDSOcr.rotate(page.canvas, page.rot || 0), 260);
+    return c.toDataURL("image/jpeg", 0.7);
+  }
+
+  function renderOcrPages() {
+    $("ocrPages").innerHTML = ocrPages.map(function (p, i) {
+      return '<div class="ocr-page" data-ocr="' + i + '"><img alt="" src="' + p.thumb + '">' +
+        '<div class="ocr-name" title="' + esc(p.name) + '">' + esc(p.name) + "</div>" +
+        '<div class="ocr-state' + (p.done ? " done" : "") + '">' + esc(p.state || (p.manual ? "Yön: elle" : "Yön: otomatik")) + "</div>" +
+        '<div class="ocr-tools"><button type="button" data-rot="-90" title="Sola döndür" aria-label="Sola döndür"' + (ocrBusy ? " disabled" : "") + ">↺</button>" +
+        '<button type="button" data-rot="90" title="Sağa döndür" aria-label="Sağa döndür"' + (ocrBusy ? " disabled" : "") + ">↻</button>" +
+        '<button type="button" data-ocr-del title="Kaldır" aria-label="Kaldır"' + (ocrBusy ? " disabled" : "") + ">✕</button></div></div>";
+    }).join("");
+    $("ocrRun").hidden = !ocrPages.length;
+    $("ocrClear").hidden = !ocrPages.length;
+    $("ocrRun").disabled = ocrBusy || !ocrPages.some(function (p) { return !p.done; });
+    $("ocrClear").disabled = ocrBusy;
+  }
+
+  function ocrStatus(html, frac) {
+    $("ocrMsg").innerHTML = '<p class="small">' + html + "</p>" +
+      (frac !== undefined ? '<div class="ocr-bar"><span style="width:' + Math.round(frac * 100) + '%"></span></div>' : "");
+  }
+
+  function addOcrFiles(files) {
+    if (!window.YDSOcr || !files.length) return;
+    ocrBusy = true;
+    renderOcrPages();
+    ocrStatus("Dosyalar açılıyor…");
+    var list = Array.prototype.slice.call(files);
+    list.reduce(function (p, f) {
+      return p.then(function () { return window.YDSOcr.fileToPages(f, $("ocrRange").value); }).then(function (pages) {
+        pages.forEach(function (pg) {
+          pg.rot = 0;
+          pg.thumb = thumb(pg);
+          ocrPages.push(pg);
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      ocrStatus(ocrPages.length + ' sayfa hazır. Gerekirse yönünü düzelt, sonra "Metni oku"ya bas.');
+    }, function (err) {
+      ocrStatus('<span class="bad">' + esc(err.message || String(err)) + "</span>");
+    }).then(function () {
+      ocrBusy = false;
+      renderOcrPages();
+      $("ocrFiles").value = "";
+    });
+  }
+
+  function runOcr() {
+    if (ocrBusy) return;
+    var todo = ocrPages.filter(function (p) { return !p.done; });
+    if (!todo.length) return;
+    ocrBusy = true;
+    var cols = parseInt($("ocrCols").value, 10);
+    var texts = [];
+    var total = todo.length;
+    ocrStatus("Okuma motoru hazırlanıyor (ilk seferde indirilir)…", 0);
+    renderOcrPages();
+    window.YDSOcr.warmUp().then(function () {
+      return todo.reduce(function (p, page, idx) {
+        return p.then(function () {
+          var label = "Sayfa " + (idx + 1) + "/" + total;
+          page.state = "Yön bulunuyor…";
+          renderOcrPages();
+          ocrStatus(label + ": yön bulunuyor…", idx / total);
+          var rot = page.manual ? Promise.resolve(page.rot) : window.YDSOcr.detectRotation(page.canvas);
+          return rot.then(function (deg) {
+            if (deg !== page.rot) { page.rot = deg; page.thumb = thumb(page); }
+            page.state = "Okunuyor…";
+            renderOcrPages();
+            return window.YDSOcr.recognizePage(window.YDSOcr.rotate(page.canvas, page.rot), cols, function (f) {
+              ocrStatus(label + " okunuyor… %" + Math.round(f * 100), (idx + f) / total);
+            });
+          }).then(function (text) {
+            texts.push("=== Sayfa: " + page.name + " ===\n" + text);
+            page.done = true;
+            page.state = "Okundu ✓";
+            renderOcrPages();
+          });
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      var box = $("cqBulk");
+      var joined = texts.join("\n").trim();
+      box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + joined;
+      ocrStatus('<span class="good">' + total + " sayfa okundu ve metin 2. adımdaki kutuya eklendi.</span> Bozuk okunan yerleri düzelt, sonra \"Soruları ayır\"a bas.");
+    }, function (err) {
+      if (texts.length) {
+        var box = $("cqBulk");
+        box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + texts.join("\n").trim();
+      }
+      ocrStatus('<span class="bad">Okuma durdu: ' + esc(err && err.message ? err.message : String(err)) + "</span>" +
+        (texts.length ? " Okunan " + texts.length + " sayfanın metni kutuya eklendi." : ""));
+    }).then(function () {
+      ocrBusy = false;
+      renderOcrPages();
+    });
   }
 
   function skippedText(list) {
-    return list.map(function (s) { return s.n + " (" + esc(s.why) + ")"; }).join(", ");
+    return list.map(function (s) { return (s.n || "numarasız") + " (" + esc(s.why) + ")"; }).join(", ");
   }
 
   function undoBatch() {
@@ -349,6 +519,33 @@
     this.setAttribute("aria-expanded", String(!p.hidden));
   });
   $("cqSave").addEventListener("click", saveQuestion);
+  $("cqBulkParse").addEventListener("click", parsePreview);
+  $("ocrFiles").addEventListener("change", function () { addOcrFiles(this.files); });
+  $("ocrRun").addEventListener("click", runOcr);
+  $("ocrClear").addEventListener("click", function () {
+    ocrPages = [];
+    $("ocrMsg").innerHTML = "";
+    renderOcrPages();
+  });
+  $("ocrPages").addEventListener("click", function (e) {
+    var box = e.target.closest("[data-ocr]");
+    if (!box || ocrBusy) return;
+    var i = parseInt(box.getAttribute("data-ocr"), 10);
+    var r = e.target.closest("[data-rot]");
+    if (r) {
+      var p = ocrPages[i];
+      p.rot = ((p.rot + parseInt(r.getAttribute("data-rot"), 10)) % 360 + 360) % 360;
+      p.manual = true;
+      p.done = false;
+      p.state = "";
+      p.thumb = thumb(p);
+      renderOcrPages();
+    } else if (e.target.closest("[data-ocr-del]")) {
+      ocrPages.splice(i, 1);
+      renderOcrPages();
+    }
+  });
+  $("cqPreview").addEventListener("change", previewChange);
   $("cqBulkSave").addEventListener("click", bulkImport);
   $("cqBulkUndo").addEventListener("click", undoBatch);
   $("cqMine").addEventListener("click", function (e) {
