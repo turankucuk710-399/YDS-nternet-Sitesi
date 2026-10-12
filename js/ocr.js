@@ -41,15 +41,20 @@
   }
 
   // ---------- Dosyaları sayfa görüntülerine çevir ----------
-  function imageToCanvas(file) {
+  // Telefon fotoğrafları çok büyük olabilir; bellek taşmasın diye en uzun kenar MAX_SIDE'a indirilir
+  var MAX_SIDE = 2600;
+  function imageToCanvas(file, maxSide) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
+        var f = Math.min(1, (maxSide || MAX_SIDE) / Math.max(img.naturalWidth, img.naturalHeight));
         var c = document.createElement("canvas");
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
-        c.getContext("2d").drawImage(img, 0, 0);
+        c.width = Math.round(img.naturalWidth * f);
+        c.height = Math.round(img.naturalHeight * f);
+        var ctx = c.getContext("2d");
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
         resolve(c);
       };
@@ -71,31 +76,38 @@
     return out;
   }
 
-  // Bir dosyadan sayfa listesi: [{name, canvas}] (PDF'te sayfalar istenen aralıktan)
+  // Bir dosyadan sayfa listesi: [{name, key, load()}] (PDF'te sayfalar istenen aralıktan).
+  // Görüntüler bellekte tutulmaz; load() sayfayı yalnızca okunacağı an açar (50+ fotoğrafta sekme çökmesin).
   function fileToPages(file, range) {
     var isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    if (!isPdf) return imageToCanvas(file).then(function (c) { return [{ name: file.name, canvas: c }]; });
+    var key = file.name + "|" + file.size + "|" + file.lastModified;
+    if (!isPdf) return Promise.resolve([{ name: file.name, key: key, load: function () { return imageToCanvas(file); } }]);
     return loadScript(PDFJS).then(function () {
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
       return file.arrayBuffer();
     }).then(function (buf) {
       return window.pdfjsLib.getDocument({ data: buf }).promise;
     }).then(function (pdf) {
-      var pages = parseRange(range, pdf.numPages);
-      var out = [];
-      return pages.reduce(function (p, n) {
-        return p.then(function () { return pdf.getPage(n); }).then(function (page) {
-          var vp = page.getViewport({ scale: 1 });
-          var scale = Math.min(3, 2200 / Math.max(vp.width, vp.height));
-          var view = page.getViewport({ scale: scale });
-          var c = document.createElement("canvas");
-          c.width = Math.round(view.width);
-          c.height = Math.round(view.height);
-          return page.render({ canvasContext: c.getContext("2d"), viewport: view }).promise.then(function () {
-            out.push({ name: file.name + " · s." + n, canvas: trimWhite(c) });
-          });
-        });
-      }, Promise.resolve()).then(function () { return out; });
+      return parseRange(range, pdf.numPages).map(function (n) {
+        return {
+          name: file.name + " · s." + n,
+          key: key + "|" + n,
+          load: function () {
+            return pdf.getPage(n).then(function (page) {
+              var vp = page.getViewport({ scale: 1 });
+              var scale = Math.min(3, 2200 / Math.max(vp.width, vp.height));
+              var view = page.getViewport({ scale: scale });
+              var c = document.createElement("canvas");
+              c.width = Math.round(view.width);
+              c.height = Math.round(view.height);
+              return page.render({ canvasContext: c.getContext("2d"), viewport: view }).promise.then(function () {
+                page.cleanup();
+                return trimWhite(c);
+              });
+            });
+          }
+        };
+      });
     });
   }
 
