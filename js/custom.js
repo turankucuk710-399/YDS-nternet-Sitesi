@@ -341,17 +341,37 @@
       " Soru Bankası'nda \"Eklediğim sorular\" ya da kendi kategorilerinde çıkacak.</div>";
     if (added) {
       $("cqBulk").value = "";
+      clearDraft();
       pending = [];
       $("cqPreviewBox").hidden = true;
     }
   }
 
   // 1. adım: fotoğraf / PDF'ten metin okuma
+  // Büyük görüntüler bellekte tutulmaz (yalnızca küçük önizleme); her sayfanın metni okunur okunmaz
+  // kutuya eklenir ve taslak olarak kaydedilir. Sekme kapansa/çökse bile okunan metin kaybolmaz;
+  // aynı dosyalar yeniden seçilirse daha önce okunanlar atlanır.
   var ocrPages = [], ocrBusy = false;
+  var DRAFT_KEY = "yds-ocr-draft";
+
+  function loadDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || { text: "", done: [] }; } catch (e) { return { text: "", done: [] }; }
+  }
+  function saveDraft(extraDone) {
+    try {
+      var d = loadDraft();
+      d.text = $("cqBulk").value;
+      if (extraDone && d.done.indexOf(extraDone) === -1) d.done.push(extraDone);
+      if (!d.text.trim()) d.done = [];
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch (e) { /* depolama dolu ya da kapalı: taslak tutulamaz */ }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* yok say */ }
+  }
 
   function thumb(page) {
-    var c = window.YDSOcr.scaled(window.YDSOcr.rotate(page.canvas, page.rot || 0), 260);
-    return c.toDataURL("image/jpeg", 0.7);
+    return window.YDSOcr.rotate(page.small, page.rot || 0).toDataURL("image/jpeg", 0.7);
   }
 
   function renderOcrPages() {
@@ -378,18 +398,28 @@
     if (!window.YDSOcr || !files.length) return;
     ocrBusy = true;
     renderOcrPages();
-    ocrStatus("Dosyalar açılıyor…");
     var list = Array.prototype.slice.call(files);
+    var done = loadDraft().done;
+    var already = 0, opened = 0;
     list.reduce(function (p, f) {
       return p.then(function () { return window.YDSOcr.fileToPages(f, $("ocrRange").value); }).then(function (pages) {
-        pages.forEach(function (pg) {
-          pg.rot = 0;
-          pg.thumb = thumb(pg);
-          ocrPages.push(pg);
-        });
+        return pages.reduce(function (q, pg) {
+          return q.then(function () {
+            ocrStatus("Sayfalar hazırlanıyor… " + (++opened));
+            return pg.load();
+          }).then(function (c) {
+            pg.small = window.YDSOcr.scaled(c, 260);
+            pg.rot = 0;
+            if (done.indexOf(pg.key) !== -1) { pg.done = true; pg.state = "Daha önce okundu ✓"; already++; }
+            pg.thumb = thumb(pg);
+            ocrPages.push(pg);
+            if (ocrPages.length % 5 === 0) renderOcrPages();
+          });
+        }, Promise.resolve());
       });
     }, Promise.resolve()).then(function () {
-      ocrStatus(ocrPages.length + ' sayfa hazır. Gerekirse yönünü düzelt, sonra "Metni oku"ya bas.');
+      ocrStatus(ocrPages.length + " sayfa hazır." + (already ? " " + already + " tanesi daha önce okunmuştu, metni kutuda; atlanacak." : "") +
+        ' Gerekirse yönünü düzelt, sonra "Metni oku"ya bas.');
     }, function (err) {
       ocrStatus('<span class="bad">' + esc(err.message || String(err)) + "</span>");
     }).then(function () {
@@ -399,14 +429,18 @@
     });
   }
 
+  function appendText(text) {
+    var box = $("cqBulk");
+    box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + text.trim();
+  }
+
   function runOcr() {
     if (ocrBusy) return;
     var todo = ocrPages.filter(function (p) { return !p.done; });
     if (!todo.length) return;
     ocrBusy = true;
     var cols = parseInt($("ocrCols").value, 10);
-    var texts = [];
-    var total = todo.length;
+    var total = todo.length, read = 0;
     ocrStatus("Okuma motoru hazırlanıyor (ilk seferde indirilir)…", 0);
     renderOcrPages();
     window.YDSOcr.warmUp().then(function () {
@@ -416,16 +450,20 @@
           page.state = "Yön bulunuyor…";
           renderOcrPages();
           ocrStatus(label + ": yön bulunuyor…", idx / total);
-          var rot = page.manual ? Promise.resolve(page.rot) : window.YDSOcr.detectRotation(page.canvas);
-          return rot.then(function (deg) {
-            if (deg !== page.rot) { page.rot = deg; page.thumb = thumb(page); }
-            page.state = "Okunuyor…";
-            renderOcrPages();
-            return window.YDSOcr.recognizePage(window.YDSOcr.rotate(page.canvas, page.rot), cols, function (f) {
-              ocrStatus(label + " okunuyor… %" + Math.round(f * 100), (idx + f) / total);
+          return page.load().then(function (canvas) {
+            var rot = page.manual ? Promise.resolve(page.rot) : window.YDSOcr.detectRotation(canvas);
+            return rot.then(function (deg) {
+              if (deg !== page.rot) { page.rot = deg; page.thumb = thumb(page); }
+              page.state = "Okunuyor…";
+              renderOcrPages();
+              return window.YDSOcr.recognizePage(window.YDSOcr.rotate(canvas, page.rot), cols, function (f) {
+                ocrStatus(label + " okunuyor… %" + Math.round(f * 100) + " (sekmeyi açık tut; okunan sayfalar kaydediliyor)", (idx + f) / total);
+              });
             });
           }).then(function (text) {
-            texts.push("=== Sayfa: " + page.name + " ===\n" + text);
+            appendText("=== Sayfa: " + page.name + " ===\n" + text);
+            saveDraft(page.key);
+            read++;
             page.done = true;
             page.state = "Okundu ✓";
             renderOcrPages();
@@ -433,22 +471,30 @@
         });
       }, Promise.resolve());
     }).then(function () {
-      var box = $("cqBulk");
-      var joined = texts.join("\n").trim();
-      box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + joined;
       ocrStatus('<span class="good">' + total + " sayfa okundu ve metin 2. adımdaki kutuya eklendi.</span> Bozuk okunan yerleri düzelt, sonra \"Soruları ayır\"a bas.");
     }, function (err) {
-      if (texts.length) {
-        var box = $("cqBulk");
-        box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + texts.join("\n").trim();
-      }
       ocrStatus('<span class="bad">Okuma durdu: ' + esc(err && err.message ? err.message : String(err)) + "</span>" +
-        (texts.length ? " Okunan " + texts.length + " sayfanın metni kutuya eklendi." : ""));
+        (read ? " Okunan " + read + " sayfanın metni kutuda. \"Metni oku\"ya yeniden basarak kalanlardan devam edebilirsin." : ""));
     }).then(function () {
       ocrBusy = false;
       renderOcrPages();
     });
   }
+
+  // Önceki oturumdan kalan okunmuş metni geri yükle
+  (function restoreDraft() {
+    var d = loadDraft();
+    if (!d.text || !d.text.trim() || $("cqBulk").value.trim()) return;
+    $("cqBulk").value = d.text;
+    var pages = (d.text.match(/^=== Sayfa:/gm) || []).length;
+    $("cqBulkMsg").innerHTML = '<div class="tracked">Önceki oturumda okunan metin geri yüklendi' +
+      (pages ? " (" + pages + " sayfa)" : "") + '. Kaldığın yerden devam etmek için aynı fotoğrafları yeniden seç: okunmuş olanlar atlanır. Bitince "Soruları ayır"a bas.</div>';
+  })();
+  var draftTimer = null;
+  $("cqBulk").addEventListener("input", function () {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(function () { saveDraft(); }, 500);
+  });
 
   function skippedText(list) {
     return list.map(function (s) { return (s.n || "numarasız") + " (" + esc(s.why) + ")"; }).join(", ");
