@@ -102,8 +102,62 @@
     return new RegExp("\\b" + parts.join("\\s+") + "\\b", "i");
   }
 
+  var storageOk = true;
+
   function save() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { }
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      storageOk = true;
+    } catch (e) {
+      storageOk = false;
+      showStorageWarning();
+    }
+  }
+
+  // Tarayıcı kaydı tutabiliyor mu? Uygulama içi tarayıcılar ve gizli sekmeler kaydı silebilir.
+  function checkStorage() {
+    try {
+      localStorage.setItem("yds-probe", "1");
+      storageOk = localStorage.getItem("yds-probe") === "1";
+      localStorage.removeItem("yds-probe");
+    } catch (e) { storageOk = false; }
+    // Tarayıcıdan, yer darlığında bu sitenin verisini silmemesini iste
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
+    if (!storageOk) showStorageWarning();
+  }
+
+  function showStorageWarning() {
+    var el = $("storageWarning");
+    if (!el) return;
+    el.hidden = false;
+    el.innerHTML = "<strong>⚠️ Bu tarayıcı ilerlemeni kaydetmiyor.</strong> Gizli sekmede ya da bir uygulamanın (WhatsApp, Instagram vb.) içinden açtıysan " +
+      "siteyi Chrome veya Safari'de normal sekmede aç. Ana ekrana eklemek de işe yarar.";
+  }
+
+  function exportBackup() {
+    var data = JSON.stringify({ app: "yds-calisma", v: 1, at: new Date().toISOString(), state: state });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    a.download = "yds-yedek-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
+  function importBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var d = JSON.parse(reader.result);
+        if (!d || d.app !== "yds-calisma" || !d.state) throw new Error("bad");
+        if (!confirm("Yedek yüklensin mi? Bu tarayıcıdaki mevcut ilerlemenin yerini alacak.")) return;
+        localStorage.setItem(STORE_KEY, JSON.stringify(d.state));
+        location.reload();
+      } catch (e) {
+        alert("Bu dosya geçerli bir YDS Çalışma yedeği değil.");
+      }
+    };
+    reader.readAsText(file);
   }
 
   // Makale kelimeleri (t: "art") state.artWords içinde "learned" / "review" olarak tutulur.
@@ -328,11 +382,20 @@
   // ---------- Aralıklı tekrar (SRS) ----------
   // Kartlarda "Bilmiyorum" ya da "Tekrara ihtiyacım var" denen her kelime state.srs içinde kalıcı olarak
   // tutulur (sıfırlanmadıkça silinmez). Her kelimenin bir kutusu (box) ve bir sonraki tekrar zamanı (due) vardır:
-  //   Bilmiyorum  → kutu 0, hemen tekrar (her girişte ve oturum içinde birkaç kart sonra yeniden sorulur)
-  //   Tekrar      → kutu 1 (ya da bir alt kutu), birkaç saat sonra
-  //   Biliyorum   → bir üst kutu; aralık giderek uzar (4 saat, 1, 3, 7, 16, 35 gün) ama kelime hafızadan çıkmaz
+  //   Bilmiyorum  → kutu 0: her girişte ve oturum içinde birkaç kart sonra yeniden sorulur
+  //   Tekrar      → kutu 1: siteye her yeni girişte (ve aynı girişte 1 saat sonra) yeniden sorulur
+  //   Biliyorum   → bir üst kutu; aralık giderek uzar (1, 3, 7, 16, 35 gün) ama kelime hafızadan çıkmaz.
+  //                 Aynı girişte "Bilmiyorum/Tekrar" denmiş bir kelime, o girişte "Biliyorum" dense de kutu 1'de
+  //                 kalır; zor listesinden çıkması için başka bir girişte de bilinmesi gerekir.
   var MIN = 60e3, HOUR = 60 * MIN, DAY = 24 * HOUR;
-  var BOX_INTERVALS = [0, 4 * HOUR, DAY, 3 * DAY, 7 * DAY, 16 * DAY, 35 * DAY];
+  var BOX_INTERVALS = [0, HOUR, DAY, 3 * DAY, 7 * DAY, 16 * DAY, 35 * DAY];
+  // Her sayfa açılışı yeni bir "giriş"tir
+  var VISIT = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  // Zor (0) ve tekrar (1) kutusundaki kelimeler her yeni girişte sorulur
+  function isDue(r, now) {
+    return r.due <= now || (r.box <= 1 && r.seen !== VISIT);
+  }
   var BOX_LABELS = ["Zor", "Tekrar", "Öğreniliyor", "Öğreniliyor", "İyi", "İyi", "Çok iyi"];
 
   function cardKey(w) { return String(w.key || w.w).toLowerCase(); }
@@ -342,7 +405,9 @@
     var box;
     if (grade === 0) box = 0;
     else if (grade === 1) box = r.box >= 2 ? r.box - 1 : 1;
-    else box = state.srs[cardKey(w)] ? Math.min(BOX_INTERVALS.length - 1, r.box + 1) : null;
+    else if (!state.srs[cardKey(w)]) box = null;
+    else if (r.box <= 1 && r.hardVisit === VISIT) box = 1; // bu girişte zorlanıldı: bir sonraki girişte yine sorulsun
+    else box = Math.min(BOX_INTERVALS.length - 1, r.box + 1);
     return box === null ? null : { box: box, wait: BOX_INTERVALS[box] };
   }
 
@@ -356,6 +421,8 @@
     r.n++;
     if (grade === 0) r.lapses++;
     if (grade === 1) r.reviews++;
+    if (grade < 2) r.hardVisit = VISIT;
+    r.seen = VISIT;
     r.last = now;
     r.g = grade;
     // Kelime listesinde olmayan (makale / eklenen) kelimeler için gösterim bilgisi
@@ -375,7 +442,7 @@
   // Zamanı gelen kartlar: önce zorlar (kutu 0), sonra en çok gecikenler
   function dueCards(now) {
     now = now || Date.now();
-    var keys = Object.keys(state.srs).filter(function (k) { return state.srs[k].due <= now; })
+    var keys = Object.keys(state.srs).filter(function (k) { return isDue(state.srs[k], now); })
       .sort(function (a, b) {
         var ra = state.srs[a], rb = state.srs[b];
         return ra.box - rb.box || ra.due - rb.due;
@@ -413,8 +480,17 @@
 
   function nextDueText() {
     var now = Date.now(), next = Infinity;
+    var hard = Object.keys(state.srs).some(function (k) { return state.srs[k].box <= 1; });
+    if (hard) return "siteye bir sonraki girişinde";
     Object.keys(state.srs).forEach(function (k) { if (state.srs[k].due > now) next = Math.min(next, state.srs[k].due); });
     return next === Infinity ? "" : waitText(next - now);
+  }
+
+  function planText(plan) {
+    if (!plan) return "takip edilmez";
+    if (plan.box === 0) return "birazdan";
+    if (plan.box === 1) return "sonraki girişte";
+    return waitText(plan.wait);
   }
 
   function waitText(ms) {
@@ -512,11 +588,9 @@
         : isKnown(w) ? " · bu kelimeyi biliyorsun" : "");
 
     // Düğmelerde bir sonraki tekrar zamanı
-    var p0 = srsPlan(w, 0), p1 = srsPlan(w, 1), p2 = srsPlan(w, 2);
-    $("cardUnknown").querySelector(".when").textContent = "birazdan";
-    $("cardReview").querySelector(".when").textContent = waitText(p1.wait);
-    $("cardKnown").querySelector(".when").textContent = p2 ? waitText(p2.wait) : "takip edilmez";
-    void p0;
+    $("cardUnknown").querySelector(".when").textContent = planText(srsPlan(w, 0));
+    $("cardReview").querySelector(".when").textContent = planText(srsPlan(w, 1));
+    $("cardKnown").querySelector(".when").textContent = planText(srsPlan(w, 2));
   }
 
   function flipCard() {
@@ -783,6 +857,9 @@
   // ---------- Başlangıç ----------
   function init() {
     load();
+    checkStorage();
+    $("backupExport").addEventListener("click", exportBackup);
+    $("backupImport").addEventListener("change", function () { if (this.files[0]) importBackup(this.files[0]); this.value = ""; });
     initTheme();
     initWords();
     initCards();
