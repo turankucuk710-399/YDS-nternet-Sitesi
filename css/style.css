@@ -632,3 +632,8 @@ label.linkish { cursor: pointer; }
 .add-panel label.imp-opt.is-ans { background: var(--good-bg); }
 .imp-opt input { margin-top: 0.25rem; }
 .imp-opt b { min-width: 1.2rem; }
+.option.picked { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+.key-ask { background: var(--warn-bg); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; }
+.key-ask p { margin: 0 0 0.5rem; }
+.key-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.key-picks .btn { min-width: 3rem; }

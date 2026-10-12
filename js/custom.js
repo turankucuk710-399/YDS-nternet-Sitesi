@@ -210,7 +210,7 @@
     $("cqMineCount").textContent = qs.length;
     $("cqMine").innerHTML = qs.length ? qs.map(function (q) {
       return '<li><div><span class="tag">' + esc(cats[q.cat] || q.cat) + "</span> " + esc(q.q.length > 120 ? q.q.slice(0, 120) + "…" : q.q) +
-        '<div class="small muted">Doğru cevap: ' + L[q.a] + ") " + esc(q.o[q.a]) + "</div></div>" +
+        '<div class="small muted">' + (q.a >= 0 ? "Doğru cevap: " + L[q.a] + ") " + esc(q.o[q.a]) : "Cevap henüz işaretlenmedi (çözerken sorulacak)") + "</div></div>" +
         '<button class="btn btn-sm" data-del-q="' + esc(q.uid) + '">Sil</button></li>';
     }).join("") : '<li class="muted">Henüz soru eklemedin.</li>';
   }
@@ -254,7 +254,7 @@
     var res = window.YDSImport.parse($("cqBulk").value, { category: $("cqBulkCat").value, keepUnanswered: true, ocr: true });
     var msg = $("cqBulkMsg");
     msg.innerHTML = "";
-    pending = res.questions.map(function (q) { q.on = q.a >= 0; return q; });
+    pending = res.questions.map(function (q) { q.on = true; return q; });
     if (!pending.length) {
       $("cqPreviewBox").hidden = true;
       msg.innerHTML = '<p class="bad">Hiç soru ayrılamadı.' +
@@ -270,7 +270,7 @@
     var cats = window.YDS_CATEGORIES || {};
     var noAns = pending.filter(function (q) { return q.a < 0; }).length;
     var head = '<p class="small">' + pending.length + " soru ayrıldı." +
-      (noAns ? " <strong>" + noAns + " sorunun cevabı yok</strong>: doğru şıkkı işaretle; işaretlemediklerin kaydedilmez." : " Cevapların hepsi anahtardan alındı; kontrol edip kaydedebilirsin.") + "</p>" +
+      (noAns ? " <strong>" + noAns + " sorunun cevabı yok</strong> — sorun değil: hepsini şimdi kaydedebilirsin; soruyu çözerken doğru şıkkı bir kez işaretlemen istenir. İstersen şimdiden de işaretleyebilirsin." : " Cevapların hepsi anahtardan alındı; kontrol edip kaydedebilirsin.") + "</p>" +
       (skipped && skipped.length ? '<p class="small bad">Ayrılamayanlar: ' + skippedText(skipped) + " — metinde düzeltip yeniden ayırabilirsin.</p>" : "");
     $("cqPreview").innerHTML = head + '<ol class="imp-list">' + pending.map(function (q, i) {
       return '<li class="imp-item' + (q.a < 0 ? " no-ans" : "") + (q.on ? "" : " off") + '" data-imp="' + i + '">' +
@@ -309,11 +309,7 @@
     var cats = window.YDS_CATEGORIES || {};
     var msg = $("cqBulkMsg");
     var chosen = pending.filter(function (q) { return q.on; });
-    var missing = chosen.filter(function (q) { return q.a < 0; });
-    if (missing.length) {
-      msg.innerHTML = '<p class="bad">Şu soruların doğru şıkkını işaretle ya da "Ekle" işaretini kaldır: ' + missing.map(function (q) { return q.n || "numarasız"; }).join(", ") + ".</p>";
-      return;
-    }
+    var missing = chosen.filter(function (q) { return q.a < 0; }).length;
     if (!chosen.length) {
       msg.innerHTML = '<p class="bad">Kaydedilecek soru seçilmedi.</p>';
       return;
@@ -341,6 +337,7 @@
       '<div class="tracked good"><strong>' + added + " soru</strong> eklendi" +
       (added ? ": " + Object.keys(counts).map(function (k) { return esc(cats[k] || k) + " " + counts[k]; }).join(", ") : "") + "." +
       (dup ? " " + dup + " soru zaten ekli olduğu için atlandı." : "") +
+      (missing ? " " + missing + " sorunun cevabını çözerken işaretleyeceksin." : "") +
       " Soru Bankası'nda \"Eklediğim sorular\" ya da kendi kategorilerinde çıkacak.</div>";
     if (added) {
       $("cqBulk").value = "";

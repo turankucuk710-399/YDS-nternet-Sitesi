@@ -668,6 +668,36 @@
 
     function choose(i) {
       var it = items[pos];
+      // Cevap anahtarı olmayan (kitaptan içe aktarılmış) soru: önce doğru şıkkı kullanıcıdan öğren
+      if (it.answer < 0) return askKey(i);
+      grade(i);
+    }
+
+    function askKey(i) {
+      var it = items[pos];
+      container.querySelectorAll(".option").forEach(function (btn) {
+        btn.disabled = true;
+        if (parseInt(btn.getAttribute("data-i"), 10) === i) btn.classList.add("picked");
+      });
+      var fb = container.querySelector("#quizFeedback");
+      fb.innerHTML = '<div class="key-ask"><p><strong>Senin cevabın: ' + LETTERS[i] + ")</strong> — Bu sorunun cevap anahtarı henüz yok. " +
+        "Kitaptan bakıp <strong>doğru şıkkı</strong> işaretle; site bunu hatırlar ve bir daha sormaz.</p>" +
+        '<div class="key-picks">' + LETTERS.map(function (L, k) {
+          return '<button class="btn key-pick" data-k="' + k + '">' + L + ")</button>";
+        }).join("") + "</div></div>";
+      fb.querySelectorAll(".key-pick").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var k = parseInt(b.getAttribute("data-k"), 10);
+          it.answer = k;
+          if (it.setAnswer) it.setAnswer(k);
+          grade(i);
+        });
+      });
+      fb.querySelector(".key-pick").focus();
+    }
+
+    function grade(i) {
+      var it = items[pos];
       var ok = i === it.answer;
       if (ok) score++;
       results.push({ item: it, chosen: i, ok: ok });
@@ -676,6 +706,7 @@
       container.querySelectorAll(".option").forEach(function (btn) {
         var bi = parseInt(btn.getAttribute("data-i"), 10);
         btn.disabled = true;
+        btn.classList.remove("picked");
         if (bi === it.answer) btn.classList.add("correct");
         else if (bi === i) btn.classList.add("wrong");
       });
@@ -739,7 +770,7 @@
     var idx = "12345".indexOf(key);
     if (idx === -1) idx = LETTERS.indexOf(key);
     if (idx !== -1) {
-      var btn = view.querySelector('.option[data-i="' + idx + '"]:not(:disabled)');
+      var btn = view.querySelector('.option[data-i="' + idx + '"]:not(:disabled)') || view.querySelector('.key-pick[data-k="' + idx + '"]');
       if (btn) btn.click();
     }
   });
@@ -820,6 +851,7 @@
           options: q.o,
           answer: q.a,
           explain: q.x,
+          setAnswer: function (k) { q.a = k; save(); },
           onAnswer: function (ok, chosen) { recordAnswer(i, ok, chosen); }
         };
       });
