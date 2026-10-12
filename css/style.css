@@ -593,3 +593,7 @@ code { font-family: ui-monospace, monospace; background: var(--surface-2); paddi
   .card-actions .btn { padding: 0.5rem 0.4rem; font-size: 0.85rem; }
   .card-actions kbd { display: none; }
 }
+
+.storage-warning { background: var(--bad-bg); color: var(--text); border-bottom: 1px solid var(--bad); padding: 0.7rem 1rem; text-align: center; font-size: 0.93rem; }
+.storage-warning[hidden] { display: none; }
+label.linkish { cursor: pointer; }

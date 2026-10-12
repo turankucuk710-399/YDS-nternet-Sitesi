@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
   <header class="topbar">
@@ -22,6 +22,7 @@
     <button class="theme-toggle" id="themeToggle" aria-label="Tema değiştir" title="Açık / koyu tema">☾</button>
   </header>
 
+  <div class="storage-warning" id="storageWarning" hidden></div>
   <main id="app">
     <!-- Ana Sayfa -->
     <section class="view" id="view-home">
@@ -263,19 +264,22 @@
   </main>
 
   <footer class="footer">
-    <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
+    <p>İlerlemen bu tarayıcıda saklanır. Başka cihaza taşımak ya da kaybetmemek için yedekle:
+      <button class="linkish" id="backupExport">Yedeği indir</button> ·
+      <label class="linkish">Yedeği yükle<input type="file" id="backupImport" accept="application/json,.json" hidden></label> ·
+      <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=8"></script>
-  <script src="js/data/words-c2.js?v=8"></script>
-  <script src="js/data/questions.js?v=8"></script>
-  <script src="js/data/questions-extra.js?v=8"></script>
-  <script src="js/data/articles.js?v=8"></script>
-  <script src="js/translate-check.js?v=8"></script>
-  <script src="js/articles.js?v=8"></script>
-  <script src="js/review.js?v=8"></script>
-  <script src="js/import.js?v=8"></script>
-  <script src="js/custom.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/data/words.js?v=9"></script>
+  <script src="js/data/words-c2.js?v=9"></script>
+  <script src="js/data/questions.js?v=9"></script>
+  <script src="js/data/questions-extra.js?v=9"></script>
+  <script src="js/data/articles.js?v=9"></script>
+  <script src="js/translate-check.js?v=9"></script>
+  <script src="js/articles.js?v=9"></script>
+  <script src="js/review.js?v=9"></script>
+  <script src="js/import.js?v=9"></script>
+  <script src="js/custom.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
 </body>
 </html>
