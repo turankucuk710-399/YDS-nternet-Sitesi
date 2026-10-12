@@ -389,7 +389,7 @@
       var w = app.reviewWords().find(function (x) { return x.key === k; });
       if (w) app.setKnown(w, true);
       render();
-    } else if (t.hasAttribute("data-cards")) $("cardSet").value = "review";
+    } else if (t.hasAttribute("data-cards")) app.openCards("review");
     else if (t.hasAttribute("data-word-quiz")) startWordQuiz();
     else if (t.hasAttribute("data-qcat")) { qFilter = t.getAttribute("data-qcat"); renderQuestions(); }
     else if (t.hasAttribute("data-q-solve")) solveQuestions();

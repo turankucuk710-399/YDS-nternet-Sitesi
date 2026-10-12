@@ -33,7 +33,7 @@
   var STORE_KEY = "yds-study-v1";
   function emptyState() {
     return { known: {}, answers: {}, vocabBest: 0, artWords: {}, artScores: {}, missedWords: {}, weakSents: {}, qWrong: {},
-      userWords: [], userQs: [] };
+      userWords: [], userQs: [], srs: {} };
   }
   var state = emptyState();
 
@@ -52,6 +52,7 @@
         state.qWrong = parsed.qWrong || {};
         state.userWords = parsed.userWords || [];
         state.userQs = parsed.userQs || [];
+        state.srs = parsed.srs || {};
       }
     } catch (e) { /* depolama yoksa bellekte devam et */ }
     mergeUserContent();
@@ -225,7 +226,7 @@
   var routes = {
     home: renderHome,
     words: renderWords,
-    cards: startCards,
+    cards: routeCards,
     "vocab-quiz": function () { },
     questions: function () { }
   };
@@ -242,6 +243,7 @@
       a.classList.toggle("active", a.getAttribute("data-route") === name);
     });
     routes[name](arg);
+    updateSrsBadge();
     window.scrollTo(0, 0);
   }
 
@@ -252,13 +254,20 @@
     var correct = answeredIds.filter(function (k) { return state.answers[k]; }).length;
     var pct = WORDS.length ? Math.round((knownCount / WORDS.length) * 100) : 0;
 
+    var due = dueCards();
+    var hard = due.filter(function (w) { var r = state.srs[cardKey(w)]; return !r || r.box === 0; }).length;
+    $("srsBanner").hidden = !due.length;
+    $("srsBanner").innerHTML = due.length
+      ? '<div><strong>🔁 Tekrar zamanı:</strong> ' + due.length + " kelime seni bekliyor" +
+        (hard ? " (" + hard + " tanesi zor)" : "") + '.</div><a class="btn btn-primary" href="#cards" id="srsGo">Kartlarla tekrar et</a>'
+      : "";
     $("homeStats").innerHTML =
       stat(knownCount + " / " + WORDS.length, "Öğrenilen kelime", pct) +
       stat(answeredIds.length + " / " + QUESTIONS.length, "Çözülen soru",
         QUESTIONS.length ? Math.round((answeredIds.length / QUESTIONS.length) * 100) : 0) +
       stat(answeredIds.length ? Math.round((correct / answeredIds.length) * 100) + "%" : "—", "Soru başarı oranı", null) +
       stat(state.vocabBest ? state.vocabBest + "%" : "—", "En iyi kelime testi", null) +
-      stat(String(reviewWords().length + weakSentenceCount() + wrongQuestionCount()), "Tekrar bekleyen", null, "#review");
+      stat(String(pendingWordCount() + weakSentenceCount() + wrongQuestionCount()), "Tekrar bekleyen", null, "#review");
   }
 
   function stat(value, label, pct, href) {
@@ -316,46 +325,198 @@
     });
   }
 
+  // ---------- Aralıklı tekrar (SRS) ----------
+  // Kartlarda "Bilmiyorum" ya da "Tekrara ihtiyacım var" denen her kelime state.srs içinde kalıcı olarak
+  // tutulur (sıfırlanmadıkça silinmez). Her kelimenin bir kutusu (box) ve bir sonraki tekrar zamanı (due) vardır:
+  //   Bilmiyorum  → kutu 0, hemen tekrar (her girişte ve oturum içinde birkaç kart sonra yeniden sorulur)
+  //   Tekrar      → kutu 1 (ya da bir alt kutu), birkaç saat sonra
+  //   Biliyorum   → bir üst kutu; aralık giderek uzar (4 saat, 1, 3, 7, 16, 35 gün) ama kelime hafızadan çıkmaz
+  var MIN = 60e3, HOUR = 60 * MIN, DAY = 24 * HOUR;
+  var BOX_INTERVALS = [0, 4 * HOUR, DAY, 3 * DAY, 7 * DAY, 16 * DAY, 35 * DAY];
+  var BOX_LABELS = ["Zor", "Tekrar", "Öğreniliyor", "Öğreniliyor", "İyi", "İyi", "Çok iyi"];
+
+  function cardKey(w) { return String(w.key || w.w).toLowerCase(); }
+
+  function srsPlan(w, grade) {
+    var r = state.srs[cardKey(w)] || { box: 0 };
+    var box;
+    if (grade === 0) box = 0;
+    else if (grade === 1) box = r.box >= 2 ? r.box - 1 : 1;
+    else box = state.srs[cardKey(w)] ? Math.min(BOX_INTERVALS.length - 1, r.box + 1) : null;
+    return box === null ? null : { box: box, wait: BOX_INTERVALS[box] };
+  }
+
+  function srsAnswer(w, grade) {
+    var k = cardKey(w), now = Date.now();
+    var plan = srsPlan(w, grade);
+    if (!plan) return; // hiç zorlanılmamış kelimeye "Biliyorum": takibe almaya gerek yok
+    var r = state.srs[k] || { n: 0, lapses: 0, reviews: 0, added: now };
+    r.box = plan.box;
+    r.due = now + plan.wait;
+    r.n++;
+    if (grade === 0) r.lapses++;
+    if (grade === 1) r.reviews++;
+    r.last = now;
+    r.g = grade;
+    // Kelime listesinde olmayan (makale / eklenen) kelimeler için gösterim bilgisi
+    r.w = w.w; r.m = w.m; r.e = w.e || ""; r.t = w.t;
+    state.srs[k] = r;
+  }
+
+  function wordByKey(k) {
+    var main = WORDS.find(function (x) { return x.w.toLowerCase() === k; });
+    if (main) return main;
+    var a = state.artWords[k];
+    if (a) return { w: a.w, t: "art", m: a.m, e: a.s, key: k };
+    var r = state.srs[k];
+    return r && r.w ? { w: r.w, t: r.t === "art" ? "art" : (r.t || "x"), m: r.m, e: r.e, key: k } : null;
+  }
+
+  // Zamanı gelen kartlar: önce zorlar (kutu 0), sonra en çok gecikenler
+  function dueCards(now) {
+    now = now || Date.now();
+    var keys = Object.keys(state.srs).filter(function (k) { return state.srs[k].due <= now; })
+      .sort(function (a, b) {
+        var ra = state.srs[a], rb = state.srs[b];
+        return ra.box - rb.box || ra.due - rb.due;
+      });
+    var seen = {}, list = [];
+    keys.forEach(function (k) {
+      var w = wordByKey(k);
+      if (w) { seen[k] = true; list.push(w); }
+    });
+    // Diğer bölümlerden (test, makale, soru) tekrar listesine düşen ama kartlarda henüz çalışılmamış kelimeler
+    reviewWords().forEach(function (w) {
+      var k = cardKey(w);
+      if (!seen[k] && !state.srs[k]) { seen[k] = true; list.push(w); }
+    });
+    return list;
+  }
+
+  // Tekrar listesindeki kelimeler ile zamanı gelen kartların birleşimi (aynı kelime iki kez sayılmaz)
+  function pendingWordCount() {
+    var keys = {};
+    reviewWords().forEach(function (w) { keys[cardKey(w)] = true; });
+    dueCards().forEach(function (w) { keys[cardKey(w)] = true; });
+    return Object.keys(keys).length;
+  }
+
+  function srsCounts() {
+    var c = { total: 0, hard: 0, review: 0, learning: 0, due: dueCards().length };
+    Object.keys(state.srs).forEach(function (k) {
+      var b = state.srs[k].box;
+      c.total++;
+      if (b === 0) c.hard++; else if (b === 1) c.review++; else c.learning++;
+    });
+    return c;
+  }
+
+  function nextDueText() {
+    var now = Date.now(), next = Infinity;
+    Object.keys(state.srs).forEach(function (k) { if (state.srs[k].due > now) next = Math.min(next, state.srs[k].due); });
+    return next === Infinity ? "" : waitText(next - now);
+  }
+
+  function waitText(ms) {
+    if (ms <= 0) return "hemen";
+    if (ms < HOUR) return Math.max(1, Math.round(ms / MIN)) + " dk sonra";
+    if (ms < DAY) return Math.round(ms / HOUR) + " saat sonra";
+    return Math.round(ms / DAY) + " gün sonra";
+  }
+
+  function updateSrsBadge() {
+    var n = dueCards().length;
+    var b = $("cardsBadge");
+    if (b) { b.textContent = n; b.hidden = !n; }
+  }
+
   // ---------- Kartlar ----------
-  var deck = [], deckPos = 0, flipped = false;
+  var deck = [], deckPos = 0, flipped = false, sessionReps = {}, cardsOpened = false;
 
   function startCards() {
     var set = $("cardSet").value;
-    if (set === "review") { deck = shuffle(reviewWords()); deckPos = 0; showCard(); return; }
-    var pool = WORDS.filter(function (w) {
-      if (set === "all") return true;
-      if (set === "c2") return w.lvl === 4;
-      if (set === "unknown") return !isKnown(w);
-      return w.t === set;
-    });
-    deck = shuffle(pool);
+    sessionReps = {};
+    var pool;
+    if (set === "smart") pool = dueCards();
+    else if (set === "review") pool = shuffle(reviewWords());
+    else if (set === "hard") {
+      pool = Object.keys(state.srs).filter(function (k) { return state.srs[k].box <= 1; })
+        .map(wordByKey).filter(Boolean);
+      pool = shuffle(pool);
+    } else {
+      pool = shuffle(WORDS.filter(function (w) {
+        if (set === "all") return true;
+        if (set === "c2") return w.lvl === 4;
+        if (set === "unknown") return !isKnown(w);
+        return w.t === set;
+      }));
+    }
+    deck = pool;
     deckPos = 0;
     showCard();
+  }
+
+  function routeCards() {
+    // İlk açılışta zamanı gelen kart varsa akıllı tekrarla başla
+    if (!cardsOpened) {
+      cardsOpened = true;
+      $("cardSet").value = dueCards().length ? "smart" : "unknown";
+    }
+    startCards();
+  }
+
+  function renderSrsSummary() {
+    var c = srsCounts();
+    $("srsSummary").innerHTML = c.total || c.due
+      ? '<span class="srs-chip hard">Zor: <strong>' + c.hard + "</strong></span>" +
+        '<span class="srs-chip review">Tekrar: <strong>' + c.review + "</strong></span>" +
+        '<span class="srs-chip learning">Öğreniliyor: <strong>' + c.learning + "</strong></span>" +
+        '<span class="srs-chip due">Şu an sorulacak: <strong>' + c.due + "</strong></span>"
+      : '<span class="muted small">"Bilmiyorum" ya da "Tekrara ihtiyacım var" dediğin kelimeler burada takip edilir ve aralıklarla yeniden sorulur.</span>';
   }
 
   function showCard() {
     flipped = false;
     $("flashcard").classList.remove("flipped");
     var done = deckPos >= deck.length;
-    $("cardKnown").disabled = $("cardUnknown").disabled = done;
+    $("cardKnown").disabled = $("cardUnknown").disabled = $("cardReview").disabled = done;
+    renderSrsSummary();
+    updateSrsBadge();
 
     if (done) {
+      var smart = $("cardSet").value === "smart";
       $("cardProgress").textContent = deck.length ? "Bu desteyi bitirdin!" : "";
       $("cardFront").innerHTML = deck.length
-        ? '<div class="card-word">Tebrikler! 🎉</div><div class="card-sub">Yeni bir deste seç veya tekrar başlamak için tıkla.</div>'
-        : '<div class="card-word">Kart yok</div><div class="card-sub">Bu desteyi tamamen biliyorsun. Başka bir deste seç.</div>';
+        ? '<div class="card-word">Tebrikler! 🎉</div><div class="card-sub">' +
+          (smart && nextDueText() ? "Sıradaki tekrar " + nextDueText() + "." : "Yeni bir deste seç veya tekrar başlamak için tıkla.") + "</div>"
+        : smart
+          ? '<div class="card-word">Şu an sorulacak kart yok</div><div class="card-sub">' +
+            (nextDueText() ? "Sıradaki tekrar " + nextDueText() + ". " : "") + "Başka bir deste seçerek devam edebilirsin.</div>"
+          : '<div class="card-word">Kart yok</div><div class="card-sub">Bu desteyi tamamen biliyorsun. Başka bir deste seç.</div>';
       $("cardBack").innerHTML = "";
+      ["cardUnknown", "cardReview", "cardKnown"].forEach(function (id) { $(id).querySelector(".when").textContent = ""; });
       return;
     }
 
     var w = deck[deckPos];
     var rev = $("cardReverse").checked;
-    var en = '<div class="card-word">' + esc(w.w) + '</div><div class="card-sub">' + TYPE_LABELS[w.t] + "</div>";
-    var tr = '<div class="card-word tr">' + esc(w.m) + '</div><div class="card-example">' + esc(w.e) + "</div>";
+    var en = '<div class="card-word">' + esc(w.w) + '</div><div class="card-sub">' + (TYPE_LABELS[w.t] || "kelime") + "</div>";
+    var tr = '<div class="card-word tr">' + esc(w.m) + '</div><div class="card-example">' + esc(w.e || "") + "</div>";
     $("cardFront").innerHTML = rev ? '<div class="card-word tr">' + esc(w.m) + "</div>" : en;
-    $("cardBack").innerHTML = rev ? en + '<div class="card-example">' + esc(w.e) + "</div>" : tr;
-    $("cardProgress").textContent = "Kart " + (deckPos + 1) + " / " + deck.length +
-      (isKnown(w) ? " · bu kelimeyi biliyorsun" : "");
+    $("cardBack").innerHTML = rev ? en + '<div class="card-example">' + esc(w.e || "") + "</div>" : tr;
+
+    var r = state.srs[cardKey(w)];
+    $("cardProgress").innerHTML = "Kart " + (deckPos + 1) + " / " + deck.length +
+      (r ? ' · <span class="srs-tag box' + Math.min(r.box, 2) + '">' + BOX_LABELS[r.box] + "</span>" +
+        (r.lapses ? " · " + r.lapses + " kez bilmedin" : "")
+        : isKnown(w) ? " · bu kelimeyi biliyorsun" : "");
+
+    // Düğmelerde bir sonraki tekrar zamanı
+    var p0 = srsPlan(w, 0), p1 = srsPlan(w, 1), p2 = srsPlan(w, 2);
+    $("cardUnknown").querySelector(".when").textContent = "birazdan";
+    $("cardReview").querySelector(".when").textContent = waitText(p1.wait);
+    $("cardKnown").querySelector(".when").textContent = p2 ? waitText(p2.wait) : "takip edilmez";
+    void p0;
   }
 
   function flipCard() {
@@ -364,32 +525,43 @@
     $("flashcard").classList.toggle("flipped", flipped);
   }
 
-  function answerCard(known) {
+  // grade: 0 = Bilmiyorum, 1 = Tekrara ihtiyacım var, 2 = Biliyorum
+  function answerCard(grade) {
     if (deckPos >= deck.length) return;
     var w = deck[deckPos];
-    setKnown(w, known, "kart");
-    if (!known) {
-      // Bilinmeyen kelimeyi birkaç kart sonra tekrar göster
-      var insertAt = Math.min(deck.length, deckPos + 4);
-      deck.splice(insertAt, 0, w);
+    var k = cardKey(w);
+    srsAnswer(w, grade);
+    setKnown(w, grade === 2, "kart");
+    // Oturum içinde yeniden gösterme: bilinmeyen 3 kart sonra (en fazla 5 kez), tekrar istenen 8 kart sonra (bir kez)
+    var reps = sessionReps[k] || 0;
+    if (grade === 0 && reps < 5) {
+      deck.splice(Math.min(deck.length, deckPos + 4), 0, w);
+      sessionReps[k] = reps + 1;
+    } else if (grade === 1 && reps < 1) {
+      deck.splice(Math.min(deck.length, deckPos + 9), 0, w);
+      sessionReps[k] = reps + 1;
     }
     deckPos++;
+    save();
     showCard();
   }
 
   function initCards() {
     $("flashcard").addEventListener("click", flipCard);
-    $("cardKnown").addEventListener("click", function () { answerCard(true); });
-    $("cardUnknown").addEventListener("click", function () { answerCard(false); });
+    $("cardKnown").addEventListener("click", function () { answerCard(2); });
+    $("cardReview").addEventListener("click", function () { answerCard(1); });
+    $("cardUnknown").addEventListener("click", function () { answerCard(0); });
     $("cardSet").addEventListener("change", startCards);
     $("cardReverse").addEventListener("change", showCard);
     document.addEventListener("keydown", function (e) {
       if ($("view-cards").hidden) return;
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
       if (e.key === " ") { e.preventDefault(); flipCard(); }
-      else if (e.key === "ArrowRight") answerCard(true);
-      else if (e.key === "ArrowLeft") answerCard(false);
+      else if (e.key === "ArrowRight" || e.key === "3") answerCard(2);
+      else if (e.key === "ArrowDown" || e.key === "2") { e.preventDefault(); answerCard(1); }
+      else if (e.key === "ArrowLeft" || e.key === "1") answerCard(0);
     });
+    updateSrsBadge();
   }
 
   // ---------- Ortak çoktan seçmeli test motoru ----------
@@ -599,8 +771,14 @@
     refreshQuestionCats: function () { if (refreshCats) refreshCats(); },
     recordAnswer: recordAnswer,
     runQuiz: runQuiz,
+    // Başka bölümlerden belirli bir kart destesini açmak için (ilk açılıştaki otomatik seçimi atlar)
+    openCards: function (set) { cardsOpened = true; $("cardSet").value = set; },
     registerRoute: function (name, fn) { routes[name] = fn; }
   };
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("#srsGo")) { cardsOpened = true; $("cardSet").value = "smart"; }
+  });
 
   // ---------- Başlangıç ----------
   function init() {
@@ -613,7 +791,7 @@
     // app.js'ten önce yüklenen modüller (ör. js/articles.js) burada başlatılır
     (window.YDS_MODULES || []).forEach(function (fn) { fn(window.YDSApp); });
     $("resetProgress").addEventListener("click", function () {
-      if (!confirm("Tüm ilerlemen (bildiğin kelimeler, tekrar listen, soru ve çeviri sonuçları) silinecek. Emin misin?")) return;
+      if (!confirm("Tüm ilerlemen (bildiğin kelimeler, kart tekrar hafızası, tekrar listen, soru ve çeviri sonuçları) silinecek. Emin misin?")) return;
       // Eklediğin kelimeler ve sorular ilerleme sayılmaz; sıfırlamada korunur
       var keepWords = state.userWords, keepQs = state.userQs;
       state = emptyState();
