@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
   <header class="topbar">
@@ -13,7 +13,7 @@
     <nav class="nav" id="nav">
       <a href="#home" data-route="home">Ana Sayfa</a>
       <a href="#words" data-route="words">Kelimeler</a>
-      <a href="#cards" data-route="cards">Kartlar</a>
+      <a href="#cards" data-route="cards">Kartlar <span class="nav-badge" id="cardsBadge" hidden>0</span></a>
       <a href="#vocab-quiz" data-route="vocab-quiz">Kelime Testi</a>
       <a href="#questions" data-route="questions">Soru Bankası</a>
       <a href="#articles" data-route="articles">Makale Çeviri</a>
@@ -35,6 +35,7 @@
           <a class="btn" href="#questions">Soru Bankası</a>
         </div>
       </div>
+      <div class="srs-banner" id="srsBanner" hidden></div>
       <div class="stats" id="homeStats"></div>
       <div class="grid">
         <a class="tile" href="#words"><h3>Kelime Listesi</h3><p>Fiiller, isimler, sıfatlar, öbek fiiller ve bağlaçlar — anlam ve örnek cümleleriyle.</p></a>
@@ -125,6 +126,8 @@
       <h1>Kelime Kartları</h1>
       <div class="toolbar">
         <select id="cardSet">
+          <option value="smart">🔁 Akıllı tekrar (zamanı gelenler)</option>
+          <option value="hard">Zor ve tekrar edilecekler</option>
           <option value="unknown">Henüz bilmediklerim</option>
           <option value="all">Tüm kelimeler</option>
           <option value="c2">C2 kelimeler</option>
@@ -138,6 +141,7 @@
         </select>
         <label class="check"><input type="checkbox" id="cardReverse"> Türkçeden başla</label>
       </div>
+      <div class="srs-summary" id="srsSummary"></div>
       <p class="muted" id="cardProgress"></p>
       <div class="card-wrap">
         <button class="flashcard" id="flashcard" aria-live="polite">
@@ -145,10 +149,11 @@
           <div class="card-face card-back" id="cardBack"></div>
         </button>
       </div>
-      <p class="muted center">Kartı çevirmek için tıkla veya <kbd>Boşluk</kbd> tuşuna bas.</p>
+      <p class="muted center small">Kartı çevirmek için tıkla veya <kbd>Boşluk</kbd>. Klavye: <kbd>←</kbd> Bilmiyorum, <kbd>↓</kbd> Tekrar, <kbd>→</kbd> Biliyorum.</p>
       <div class="card-actions">
-        <button class="btn btn-bad" id="cardUnknown">Bilmiyorum <kbd>←</kbd></button>
-        <button class="btn btn-good" id="cardKnown">Biliyorum <kbd>→</kbd></button>
+        <button class="btn btn-bad" id="cardUnknown"><span>Bilmiyorum <kbd>←</kbd></span><span class="when"></span></button>
+        <button class="btn btn-warn" id="cardReview"><span>Tekrara ihtiyacım var <kbd>↓</kbd></span><span class="when"></span></button>
+        <button class="btn btn-good" id="cardKnown"><span>Biliyorum <kbd>→</kbd></span><span class="when"></span></button>
       </div>
     </section>
 
@@ -261,16 +266,16 @@
     <p>İlerlemen bu tarayıcıda saklanır. <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=7"></script>
-  <script src="js/data/words-c2.js?v=7"></script>
-  <script src="js/data/questions.js?v=7"></script>
-  <script src="js/data/questions-extra.js?v=7"></script>
-  <script src="js/data/articles.js?v=7"></script>
-  <script src="js/translate-check.js?v=7"></script>
-  <script src="js/articles.js?v=7"></script>
-  <script src="js/review.js?v=7"></script>
-  <script src="js/import.js?v=7"></script>
-  <script src="js/custom.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/data/words.js?v=8"></script>
+  <script src="js/data/words-c2.js?v=8"></script>
+  <script src="js/data/questions.js?v=8"></script>
+  <script src="js/data/questions-extra.js?v=8"></script>
+  <script src="js/data/articles.js?v=8"></script>
+  <script src="js/translate-check.js?v=8"></script>
+  <script src="js/articles.js?v=8"></script>
+  <script src="js/review.js?v=8"></script>
+  <script src="js/import.js?v=8"></script>
+  <script src="js/custom.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>
