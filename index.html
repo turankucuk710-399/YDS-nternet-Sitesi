@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
   <header class="topbar">
@@ -203,16 +203,48 @@
         <div class="toolbar"><button class="btn btn-primary" id="cqSave">Soruyu kaydet</button></div>
         <div id="cqMsg"></div>
         <details class="bulk" id="cqBulkBox">
-          <summary>Toplu içe aktar (metin yapıştır)</summary>
-          <p class="muted small">Elinde metin olarak bulunan soruları (ör. ÖSYM'nin yayımladığı çıkmış soru kitapçıklarından kopyaladığın metni) buraya yapıştır. Numaralı sorular, <code>A) … E)</code> seçenekleri ve okuma parçaları otomatik ayrılır. Cevapları her sorunun altına <code>Cevap: B</code> diye ya da sona <code>1-B 2-C 3-A …</code> biçiminde bir cevap anahtarı olarak ekle. Her seferinde tek bir sınav yapıştır.</p>
-          <label class="block">Kategori
-            <select id="cqBulkCat"><option value="auto">YDS soru numarasına göre otomatik (1–80)</option></select>
-          </label>
-          <textarea id="cqBulk" rows="8" placeholder="1. The museum decided to ---- its opening hours.&#10;A) extend B) diminish C) conceal D) deprive E) undermine&#10;...&#10;CEVAP ANAHTARI&#10;1-A 2-C 3-B ..."></textarea>
-          <div class="toolbar">
-            <button class="btn btn-primary" id="cqBulkSave">İçe aktar</button>
-            <button class="btn" id="cqBulkUndo" hidden>Son içe aktarmayı geri al</button>
+          <summary>Toplu içe aktar (fotoğraf, PDF ya da metin)</summary>
+          <p class="muted small">Kitabındaki soruları üç adımda ekle: sayfaların fotoğrafını ya da PDF'ini okut (ya da metni kendin yapıştır), okunan metni kontrol et, sonra her sorunun doğru şıkkını işaretleyip kaydet. Her şey <strong>yalnızca bu tarayıcıda</strong> kalır; dosyaların ve soruların hiçbir yere yüklenmez.</p>
+
+          <div class="imp-step">
+            <h3>1. Fotoğraf ya da PDF'ten metin oku <span class="muted small">(metnin zaten varsa atla)</span></h3>
+            <p class="muted small">Sayfaları düz ve iyi ışıkta çek; yan çekilmiş fotoğrafların yönü otomatik bulunur. İlk kullanımda okuma motoru (~5 MB) bir kez indirilir. Okuma sayfa başına birkaç saniye sürer.</p>
+            <div class="toolbar">
+              <label class="btn file-btn">Fotoğraf / PDF seç<input type="file" id="ocrFiles" accept="image/*,application/pdf,.pdf" multiple></label>
+              <label class="inline">PDF sayfaları <input type="text" id="ocrRange" placeholder="ör. 1-4" size="7"></label>
+              <select id="ocrCols" aria-label="Sayfa düzeni">
+                <option value="2">İki sütunlu sayfa</option>
+                <option value="1">Tek sütunlu sayfa</option>
+              </select>
+            </div>
+            <div class="ocr-pages" id="ocrPages"></div>
+            <div class="toolbar">
+              <button class="btn btn-primary" id="ocrRun" hidden>Metni oku</button>
+              <button class="btn" id="ocrClear" hidden>Sayfaları temizle</button>
+            </div>
+            <div id="ocrMsg"></div>
           </div>
+
+          <div class="imp-step">
+            <h3>2. Metni kontrol et</h3>
+            <p class="muted small">Okunan metin buraya eklenir. Soru numaraları (<code>74.</code>) ve <code>A) … E)</code> seçenekleri satır başında olmalı; bozuk okunan yerleri düzeltebilirsin. Cevap anahtarın varsa sona <code>1-B 2-C 3-A …</code> biçiminde ekle; yoksa cevapları bir sonraki adımda işaretlersin. Okuma motoru boşluğu (<code>----</code>) bazen tek çizgi olarak okur; kontrol etmekte fayda var.</p>
+            <label class="block">Kategori
+              <select id="cqBulkCat"><option value="auto">YDS soru numarasına göre otomatik (1–80)</option></select>
+            </label>
+            <textarea id="cqBulk" rows="10" placeholder="1. The museum decided to ---- its opening hours.&#10;A) extend B) diminish C) conceal D) deprive E) undermine&#10;...&#10;CEVAP ANAHTARI&#10;1-A 2-C 3-B ..."></textarea>
+            <div class="toolbar">
+              <button class="btn btn-primary" id="cqBulkParse">Soruları ayır</button>
+            </div>
+          </div>
+
+          <div class="imp-step" id="cqPreviewBox" hidden>
+            <h3>3. Doğru şıkları işaretle ve kaydet</h3>
+            <div id="cqPreview"></div>
+            <div class="toolbar">
+              <button class="btn btn-primary" id="cqBulkSave">Seçili soruları kaydet</button>
+            </div>
+          </div>
+          <div class="toolbar"><button class="btn" id="cqBulkUndo" hidden>Son içe aktarmayı geri al</button></div>
           <div id="cqBulkMsg"></div>
         </details>
         <details class="bulk">
@@ -272,17 +304,19 @@
       <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=10"></script>
-  <script src="js/data/words-c2.js?v=10"></script>
-  <script src="js/data/words-exam.js?v=10"></script>
-  <script src="js/data/questions.js?v=10"></script>
-  <script src="js/data/questions-extra.js?v=10"></script>
-  <script src="js/data/articles.js?v=10"></script>
-  <script src="js/translate-check.js?v=10"></script>
-  <script src="js/articles.js?v=10"></script>
-  <script src="js/review.js?v=10"></script>
-  <script src="js/import.js?v=10"></script>
-  <script src="js/custom.js?v=10"></script>
-  <script src="js/app.js?v=10"></script>
+  <script src="js/data/words.js?v=11"></script>
+  <script src="js/data/words-c2.js?v=11"></script>
+  <script src="js/data/words-exam.js?v=11"></script>
+  <script src="js/data/questions.js?v=11"></script>
+  <script src="js/data/questions-extra.js?v=11"></script>
+  <script src="js/data/questions-more.js?v=11"></script>
+  <script src="js/data/articles.js?v=11"></script>
+  <script src="js/translate-check.js?v=11"></script>
+  <script src="js/articles.js?v=11"></script>
+  <script src="js/review.js?v=11"></script>
+  <script src="js/import.js?v=11"></script>
+  <script src="js/ocr.js?v=11"></script>
+  <script src="js/custom.js?v=11"></script>
+  <script src="js/app.js?v=11"></script>
 </body>
 </html>

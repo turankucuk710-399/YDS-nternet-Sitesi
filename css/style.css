@@ -598,3 +598,37 @@ code { font-family: ui-monospace, monospace; background: var(--surface-2); paddi
 .storage-warning[hidden] { display: none; }
 label.linkish { cursor: pointer; }
 .tag-sik { background: var(--sent-bg); color: var(--text); }
+
+/* ---- Fotoğraf / PDF'ten içe aktarma ---- */
+.imp-step { border-top: 1px solid var(--border); margin-top: 0.9rem; padding-top: 0.2rem; }
+.imp-step h3 { font-size: 1rem; margin: 0.7rem 0 0.3rem; }
+.add-panel label.inline { flex-direction: row; align-items: center; gap: 0.4rem; }
+.add-panel label.inline input { width: 6.5rem; }
+.file-btn { position: relative; overflow: hidden; cursor: pointer; flex-direction: row !important; font-weight: 600 !important; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ocr-pages { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
+.ocr-page { width: 132px; border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem; background: var(--bg); font-size: 0.78rem; }
+.ocr-page img { display: block; width: 100%; height: 120px; object-fit: contain; background: var(--surface-2); border-radius: 4px; }
+.ocr-page .ocr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0.25rem 0 0.1rem; }
+.ocr-page .ocr-state { color: var(--muted); min-height: 1.1em; }
+.ocr-page .ocr-state.done { color: var(--good); }
+.ocr-page .ocr-tools { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
+.ocr-page .ocr-tools button { flex: 1; padding: 0.2rem 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.ocr-page .ocr-tools button:disabled { opacity: 0.5; cursor: default; }
+.ocr-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin: 0.4rem 0; }
+.ocr-bar span { display: block; height: 100%; background: var(--primary); transition: width 0.2s; }
+.imp-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.6rem; }
+.imp-item { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; background: var(--bg); }
+.imp-item.no-ans { border-color: var(--warn); }
+.imp-item.off { opacity: 0.55; }
+.imp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.imp-head .imp-num { font-weight: 700; }
+.imp-head select { padding: 0.25rem 0.4rem !important; font-size: 0.85rem; }
+.add-panel .imp-head label { flex-direction: row; align-items: center; gap: 0.3rem; }
+.imp-q { margin: 0.35rem 0; font-size: 0.92rem; }
+.imp-passage { font-size: 0.8rem; color: var(--muted); margin: 0.2rem 0; }
+.add-panel label.imp-opt { flex-direction: row; align-items: flex-start; gap: 0.45rem; font-weight: 400; font-size: 0.9rem; padding: 0.2rem 0.3rem; border-radius: 6px; cursor: pointer; }
+.add-panel label.imp-opt:hover { background: var(--surface-2); }
+.add-panel label.imp-opt.is-ans { background: var(--good-bg); }
+.imp-opt input { margin-top: 0.25rem; }
+.imp-opt b { min-width: 1.2rem; }
