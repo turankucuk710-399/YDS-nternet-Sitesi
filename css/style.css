@@ -637,3 +637,5 @@ label.linkish { cursor: pointer; }
 .key-ask p { margin: 0 0 0.5rem; }
 .key-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .key-picks .btn { min-width: 3rem; }
+.auto-card { background: var(--good-bg); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0.5rem 0; display: grid; gap: 0.35rem; }
+.auto-mean { display: inline-block; margin-right: 0.6rem; font-weight: 600; }
