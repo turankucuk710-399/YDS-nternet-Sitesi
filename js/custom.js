@@ -115,36 +115,122 @@
     return { e: $("cwEx").value, etr: $("cwExTr").value };
   }
 
+  // ---------- Otomatik anlam ve örnek cümle ----------
+  // Kullanıcı yalnızca kelimeyi yazar; 3 Türkçe anlam, türü ve örnek cümle (çevirisiyle) bulunur.
+  var lookups = {};      // kelime → Promise
+  var autoFilled = {};   // hangi alanlar otomatik dolduruldu (kullanıcı değiştirirse dokunma)
+
+  function lookupWord(word) {
+    var key = lower(word);
+    if (!lookups[key]) {
+      if (!window.YDSLookup) return Promise.reject(new Error("Otomatik anlam modülü yüklenemedi."));
+      var found = findExamples(word);
+      lookups[key] = window.YDSLookup.lookup(word, found).catch(function (err) {
+        // İnternet yoksa: makalelerdeki işaretli terimlerden anlam, sitedeki cümleden örnek
+        var m = suggestMeaning(word);
+        if (!m) throw err;
+        var ex = found[0];
+        return { word: word, meanings: m.split(/\s*,\s*/).slice(0, 3), type: "x", example: ex ? { en: ex.en, tr: ex.tr, src: "site" } : null };
+      });
+      lookups[key].catch(function () { delete lookups[key]; });
+    }
+    return lookups[key];
+  }
+
+  function fillField(id, value) {
+    var el = $(id);
+    if (el.value.trim() && !autoFilled[id]) return;   // kullanıcının yazdığına dokunma
+    el.value = value || "";
+    autoFilled[id] = true;
+  }
+
+  function showLookup(word, res) {
+    if (res.corrected) { $("cwWord").value = res.word; word = res.word; }
+    fillField("cwMeaning", res.meanings.join(", "));
+    if ($("cwType").value === "x" || autoFilled.cwType) { $("cwType").value = res.type; autoFilled.cwType = true; }
+    if (res.example) { fillField("cwEx", res.example.en); fillField("cwExTr", res.example.tr); }
+    $("cwAuto").innerHTML = '<div class="auto-card"><div><strong>' + esc(word) + "</strong> — " +
+      res.meanings.map(function (m, i) { return '<span class="auto-mean">' + (i + 1) + ". " + esc(m) + "</span>"; }).join(" ") + "</div>" +
+      (res.corrected ? '<div class="small">Yazım düzeltildi: <strong>' + esc(res.word) + "</strong></div>" : "") +
+      (res.example ? '<div class="small"><em>' + esc(res.example.en) + "</em>" +
+        (res.example.tr ? '<br><span class="muted">' + esc(res.example.tr) + "</span>" : "") + "</div>" : "") +
+      '<div class="small muted">' + (res.example && res.example.src === "site" ? "Örnek cümle siteden; anlamlar" : "Anlamlar ve örnek") +
+      ' otomatik bulundu (Google Çeviri). İstersen aşağıda düzeltebilirsin; "Kaydet"e basman yeterli.</div></div>';
+  }
+
+  var lookupTimer = null;
+  function scheduleLookup() {
+    clearTimeout(lookupTimer);
+    var word = $("cwWord").value.trim();
+    if (!word || existing(word) || word.length < 2) return;
+    lookupTimer = setTimeout(function () {
+      $("cwAuto").innerHTML = '<p class="small muted">"' + esc(word) + '" için anlam ve örnek cümle aranıyor…</p>';
+      lookupWord(word).then(function (res) {
+        if ($("cwWord").value.trim() === word) showLookup(word, res);
+      }, function (err) {
+        if ($("cwWord").value.trim() !== word) return;
+        $("cwAuto").innerHTML = '<p class="small bad">Anlam otomatik bulunamadı: ' + esc(err.message || String(err)) +
+          " İnternet bağlantını kontrol et ya da anlamı kendin yaz.</p>";
+      });
+    }, 600);
+  }
+
   function updateWordHelp() {
     var word = $("cwWord").value.trim();
     var help = $("cwHelp");
-    if (!word) { help.innerHTML = ""; $("cwSuggest").innerHTML = ""; return; }
+    if (!word) { help.innerHTML = ""; $("cwSuggest").innerHTML = ""; $("cwAuto").innerHTML = ""; return; }
     var ex = existing(word);
     if (ex) {
       help.innerHTML = '<p class="bad small">"' + esc(ex.w) + '" zaten kelime listesinde: ' + esc(ex.m) + "</p>";
       $("cwSuggest").innerHTML = "";
+      $("cwAuto").innerHTML = "";
       return;
     }
-    var m = suggestMeaning(word);
-    help.innerHTML = m && !$("cwMeaning").value.trim()
-      ? '<p class="small">Önerilen anlam: <strong>' + esc(m) + '</strong> <button class="linkish" data-use-meaning="' + esc(m) + '">kullan</button></p>'
-      : "";
+    help.innerHTML = "";
     var found = findExamples(word);
-    $("cwSuggest").innerHTML = found.length
-      ? '<p class="small muted">Sitede bu kelimeyi içeren cümleler (seçmek için tıkla):</p>' +
+    $("cwSuggest").innerHTML = found.length > 1
+      ? '<p class="small muted">Sitede bu kelimeyi içeren başka cümleler de var (seçmek için tıkla):</p>' +
         found.map(function (x, i) {
           return '<button class="ex-choice" data-ex="' + i + '"><span>' + esc(x.en) + "</span>" +
             '<span class="muted small">' + esc(x.src) + (x.tr ? " · çevirisi var" : "") + "</span></button>";
         }).join("")
-      : '<p class="small muted">Sitede bu kelimeyi içeren bir cümle bulunamadı; istersen kendin bir örnek cümle yaz.</p>';
+      : "";
     $("cwSuggest")._found = found;
+    scheduleLookup();
   }
 
+  function resetWordForm() {
+    ["cwWord", "cwMeaning", "cwEx", "cwExTr"].forEach(function (id) { $(id).value = ""; });
+    $("cwType").value = "x";
+    autoFilled = {};
+    $("cwHelp").innerHTML = "";
+    $("cwSuggest").innerHTML = "";
+    $("cwAuto").innerHTML = "";
+  }
+
+  var saving = false;
   function saveWord() {
-    var w = $("cwWord").value.trim(), m = $("cwMeaning").value.trim();
+    var w = $("cwWord").value.trim();
     var msg = $("cwMsg");
-    if (!w || !m) { msg.innerHTML = '<p class="bad">Kelime ve Türkçe anlamı zorunlu.</p>'; return; }
+    if (!w) { msg.innerHTML = '<p class="bad">Önce kelimeyi yaz.</p>'; return; }
     if (existing(w)) { msg.innerHTML = '<p class="bad">"' + esc(w) + '" zaten kelime listesinde.</p>'; return; }
+    if (saving) return;
+    // Anlam henüz yoksa önce otomatik bul, sonra kaydet
+    if (!$("cwMeaning").value.trim()) {
+      saving = true;
+      msg.innerHTML = '<p class="small muted">Anlam ve örnek cümle bulunuyor…</p>';
+      lookupWord(w).then(function (res) {
+        saving = false;
+        if ($("cwWord").value.trim() !== w) return;
+        showLookup(w, res);
+        saveWord();
+      }, function (err) {
+        saving = false;
+        msg.innerHTML = '<p class="bad">Anlam otomatik bulunamadı (' + esc(err.message || String(err)) + "). Türkçe anlamı kendin yazıp yeniden kaydet.</p>";
+      });
+      return;
+    }
+    var m = $("cwMeaning").value.trim();
     var ex = selectedExample();
     var auto = false;
     if (!ex.e.trim()) {
@@ -152,40 +238,61 @@
       if (found.length) { ex = { e: found[0].en, etr: found[0].tr }; auto = true; }
     }
     var uw = addWord({ w: w, m: m, t: $("cwType").value, e: ex.e, etr: ex.etr });
-    msg.innerHTML = '<div class="tracked good"><strong>' + esc(uw.w) + "</strong> eklendi: kelime listesine, kartlara, kelime testine ve Tekrar → Kelimeler'e girdi." +
+    msg.innerHTML = '<div class="tracked good"><strong>' + esc(uw.w) + "</strong> = " + esc(uw.m) +
+      " eklendi: kelime listesine, kartlara, kelime testine ve Tekrar → Kelimeler'e girdi." +
       (uw.e ? "<br>Örnek cümle" + (auto ? " (siteden otomatik bulundu)" : "") + " Tekrar → Çeviri cümleleri'ne eklendi: <em>" + esc(uw.e) + "</em>" +
         (uw.etr ? "" : "<br><span class=\"muted small\">Bu cümlenin çevirisi olmadığı için çeviri kontrolünde yalnızca kelimenin anlamına bakılacak.</span>")
         : "<br>Örnek cümle bulunamadı; yalnızca kelime eklendi.") +
       ' <a href="#review">Tekrar\'a git →</a></div>';
-    ["cwWord", "cwMeaning", "cwEx", "cwExTr"].forEach(function (id) { $(id).value = ""; });
-    $("cwType").value = "x";
-    $("cwHelp").innerHTML = "";
-    $("cwSuggest").innerHTML = "";
+    resetWordForm();
     app.renderWords();
+    $("cwWord").focus();
   }
 
-  // Toplu ekleme: her satır "kelime = anlam"
+  // Toplu ekleme: her satıra bir kelime; "kelime = anlam" yazılırsa o anlam kullanılır, yoksa otomatik bulunur
+  var bulkBusy = false;
   function bulkAdd() {
-    var lines = $("cwBulk").value.split("\n");
-    var added = [], skipped = [], bad = [];
-    lines.forEach(function (line) {
-      if (!line.trim()) return;
-      var m = line.split(/\s*[=:\t]\s*|\s+-\s+/);
-      var w = (m[0] || "").trim(), mean = m.slice(1).join(", ").trim();
-      if (!w || !mean) { bad.push(line.trim()); return; }
-      if (existing(w)) { skipped.push(w); return; }
-      var found = findExamples(w);
-      added.push(addWord({ w: w, m: mean, t: "x", e: found[0] ? found[0].en : "", etr: found[0] ? found[0].tr : "" }));
+    if (bulkBusy) return;
+    var lines = $("cwBulk").value.split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) return;
+    var added = [], skipped = [], failed = [], reasons = [], seen = {};
+    bulkBusy = true;
+    $("cwBulkSave").disabled = true;
+    var msg = $("cwBulkMsg");
+    lines.reduce(function (p, line, idx) {
+      return p.then(function () {
+        var parts = line.split(/\s*[=:\t]\s*|\s+-\s+/);
+        var w = (parts[0] || "").trim(), mean = parts.slice(1).join(", ").trim();
+        if (!w) return;
+        if (existing(w) || seen[lower(w)]) { skipped.push(w); return; }
+        seen[lower(w)] = true;
+        msg.innerHTML = '<p class="small muted">' + (idx + 1) + "/" + lines.length + ": " + esc(w) + " aranıyor…</p>";
+        var found = findExamples(w);
+        if (mean) {
+          added.push(addWord({ w: w, m: mean, t: "x", e: found[0] ? found[0].en : "", etr: found[0] ? found[0].tr : "" }));
+          return;
+        }
+        return lookupWord(w).then(function (res) {
+          if (res.corrected && (existing(res.word) || seen[lower(res.word)])) { skipped.push(res.word); return; }
+          seen[lower(res.word)] = true;
+          added.push(addWord({ w: res.word, m: res.meanings.join(", "), t: res.type,
+            e: res.example ? res.example.en : "", etr: res.example ? res.example.tr : "" }));
+        }, function (err) { failed.push(w); reasons.push(esc(w) + ": " + esc(err && err.message ? err.message : "bulunamadı")); });
+      });
+    }, Promise.resolve()).then(function () {
+      bulkBusy = false;
+      $("cwBulkSave").disabled = false;
+      var withSent = added.filter(function (x) { return x.e; }).length;
+      msg.innerHTML =
+        (added.length ? '<div class="tracked good"><strong>' + added.length + " kelime</strong> eklendi" +
+          (withSent ? ", " + withSent + " tanesi örnek cümlesiyle birlikte çeviri tekrarına da girdi" : "") +
+          ': <span class="small">' + added.map(function (x) { return "<strong>" + esc(x.w) + "</strong> (" + esc(x.m) + ")"; }).join(" · ") + "</span>" +
+          ' <a href="#review">Tekrar\'a git →</a></div>' : "") +
+        (skipped.length ? '<p class="small muted">Zaten listede olduğu için atlandı: ' + skipped.map(esc).join(", ") + "</p>" : "") +
+        (failed.length ? '<p class="small bad">Eklenemedi (kutuda bıraktım; düzeltip yeniden dene ya da <code>kelime = anlam</code> diye yaz):<br>' + reasons.join("<br>") + "</p>" : "");
+      $("cwBulk").value = failed.join("\n");
+      app.renderWords();
     });
-    var withSent = added.filter(function (x) { return x.e; }).length;
-    $("cwBulkMsg").innerHTML =
-      (added.length ? '<div class="tracked good"><strong>' + added.length + " kelime</strong> eklendi" +
-        (withSent ? ", bunlardan " + withSent + " tanesine sitede örnek cümle bulunup çeviri tekrarına eklendi" : "") +
-        '. <a href="#review">Tekrar\'a git →</a></div>' : "") +
-      (skipped.length ? '<p class="small muted">Zaten listede olduğu için atlandı: ' + skipped.map(esc).join(", ") + "</p>" : "") +
-      (bad.length ? '<p class="small bad">Anlaşılamayan satırlar ("kelime = anlam" biçiminde yaz): ' + bad.map(esc).join(" · ") + "</p>" : "");
-    if (added.length) $("cwBulk").value = "";
-    app.renderWords();
   }
 
   // ---------- Soru ekleme ----------
@@ -553,6 +660,10 @@
     $("cwExTr").value = x.tr || "";
     document.querySelectorAll(".ex-choice").forEach(function (el) { el.classList.toggle("active", el === b); });
   });
+  ["cwMeaning", "cwEx", "cwExTr", "cwType"].forEach(function (id) {
+    $(id).addEventListener("input", function () { autoFilled[id] = false; });
+  });
+  $("cwWord").addEventListener("keydown", function (e) { if (e.key === "Enter") saveWord(); });
   $("cwSave").addEventListener("click", saveWord);
   $("cwBulkSave").addEventListener("click", bulkAdd);
 

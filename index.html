@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YDS Çalışma</title>
   <meta name="description" content="YDS'de sık çıkan temel kelimeler, kelime kartları, kelime testi ve YDS formatında örnek sorular.">
-  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
   <header class="topbar">
@@ -89,10 +89,10 @@
 
       <div class="add-panel" id="cwPanel" hidden>
         <h2>Kelime ekle</h2>
-        <p class="muted small">Eklediğin kelime otomatik olarak kelime listesine, kartlara, kelime testine ve Tekrar'a girer. Örnek cümlesi de Tekrar → Çeviri cümleleri'ne eklenir. Örnek cümle yazmazsan site kendi makale ve sorularında bu kelimeyi içeren bir cümle arar.</p>
+        <p class="muted small">Sadece İngilizce kelimeyi yaz ve "Kaydet"e bas: site <strong>3 Türkçe anlamını</strong>, türünü ve çevirisiyle birlikte bir <strong>örnek cümle</strong> otomatik bulur. Kelime listesine, kartlara, kelime testine ve Tekrar'a girer; örnek cümle de Tekrar → Çeviri cümleleri'ne eklenir.</p>
         <div class="form-grid">
           <label>İngilizce kelime / ifade<input type="text" id="cwWord" placeholder="ör. perpetuate" autocomplete="off"></label>
-          <label>Türkçe anlamı<input type="text" id="cwMeaning" placeholder="ör. sürdürmek, devam ettirmek" autocomplete="off"></label>
+          <label>Türkçe anlamı <span class="muted small">(otomatik)</span><input type="text" id="cwMeaning" placeholder="Boş bırak, site bulur" autocomplete="off"></label>
           <label>Türü
             <select id="cwType">
               <option value="x">Belirtme</option>
@@ -105,16 +105,17 @@
             </select>
           </label>
         </div>
+        <div id="cwAuto"></div>
         <div id="cwHelp"></div>
         <div id="cwSuggest" class="ex-choices"></div>
-        <label class="block">Örnek cümle (isteğe bağlı)<textarea id="cwEx" rows="2" placeholder="Boş bırakırsan sitedeki bir cümle otomatik seçilir"></textarea></label>
-        <label class="block">Cümlenin Türkçesi (isteğe bağlı; çeviri kontrolü için)<textarea id="cwExTr" rows="2"></textarea></label>
+        <label class="block">Örnek cümle <span class="muted small">(otomatik)</span><textarea id="cwEx" rows="2" placeholder="Boş bırak, site bulur"></textarea></label>
+        <label class="block">Cümlenin Türkçesi <span class="muted small">(otomatik)</span><textarea id="cwExTr" rows="2"></textarea></label>
         <div class="toolbar"><button class="btn btn-primary" id="cwSave">Kaydet</button></div>
         <div id="cwMsg"></div>
         <details class="bulk">
           <summary>Toplu ekle (her satıra bir kelime)</summary>
-          <p class="muted small">Her satırı <code>kelime = anlam</code> biçiminde yaz. Örnek cümleler sitede otomatik aranır.</p>
-          <textarea id="cwBulk" rows="5" placeholder="perpetuate = sürdürmek&#10;alleviate = hafifletmek&#10;run into = karşılaşmak"></textarea>
+          <p class="muted small">Her satıra yalnızca bir kelime yaz; anlamları ve örnek cümleleri otomatik bulunur. (İstersen <code>kelime = anlam</code> diye kendi anlamını da verebilirsin.)</p>
+          <textarea id="cwBulk" rows="5" placeholder="perpetuate&#10;alleviate&#10;run into"></textarea>
           <div class="toolbar"><button class="btn" id="cwBulkSave">Hepsini ekle</button></div>
           <div id="cwBulkMsg"></div>
         </details>
@@ -304,19 +305,20 @@
       <button class="linkish" id="resetProgress">İlerlemeyi sıfırla</button></p>
   </footer>
 
-  <script src="js/data/words.js?v=13"></script>
-  <script src="js/data/words-c2.js?v=13"></script>
-  <script src="js/data/words-exam.js?v=13"></script>
-  <script src="js/data/questions.js?v=13"></script>
-  <script src="js/data/questions-extra.js?v=13"></script>
-  <script src="js/data/questions-more.js?v=13"></script>
-  <script src="js/data/articles.js?v=13"></script>
-  <script src="js/translate-check.js?v=13"></script>
-  <script src="js/articles.js?v=13"></script>
-  <script src="js/review.js?v=13"></script>
-  <script src="js/import.js?v=13"></script>
-  <script src="js/ocr.js?v=13"></script>
-  <script src="js/custom.js?v=13"></script>
-  <script src="js/app.js?v=13"></script>
+  <script src="js/data/words.js?v=14"></script>
+  <script src="js/data/words-c2.js?v=14"></script>
+  <script src="js/data/words-exam.js?v=14"></script>
+  <script src="js/data/questions.js?v=14"></script>
+  <script src="js/data/questions-extra.js?v=14"></script>
+  <script src="js/data/questions-more.js?v=14"></script>
+  <script src="js/data/articles.js?v=14"></script>
+  <script src="js/translate-check.js?v=14"></script>
+  <script src="js/articles.js?v=14"></script>
+  <script src="js/review.js?v=14"></script>
+  <script src="js/import.js?v=14"></script>
+  <script src="js/ocr.js?v=14"></script>
+  <script src="js/lookup.js?v=14"></script>
+  <script src="js/custom.js?v=14"></script>
+  <script src="js/app.js?v=14"></script>
 </body>
 </html>
